@@ -555,6 +555,7 @@ PersistentKeepalive = 25
                     updateProtocolButtons()
                     busy = false
                     status.text = "WARP-профиль создан и сохранён. Reserved: $reserved"
+                    refreshProfilesUi()
                     Toast.makeText(this, "Профиль Cloudflare WARP сохранён", Toast.LENGTH_LONG).show()
                     updateConnectionUi()
                 }
@@ -725,6 +726,7 @@ PersistentKeepalive = 25
                 .putString(KEY_WARP_RESERVED, reserved)
                 .apply()
             importedConfig = parsed
+            refreshProfilesUi()
             isWarpConfig = detectedWarp
             warpReserved = reserved
             if (detectedWarp) protocol = "WARP"
