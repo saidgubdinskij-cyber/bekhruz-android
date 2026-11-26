@@ -60,6 +60,12 @@ jobs:
       - name: Build debug APK
         run: gradle assembleDebug
 
+      - name: Verify WARP-aware native engine is packaged
+        run: |
+          set -euo pipefail
+          unzip -p app/build/outputs/apk/debug/app-debug.apk lib/arm64-v8a/libwg-go.so > /tmp/libwg-go.so
+          strings /tmp/libwg-go.so | grep -q 'bekhruz-warp-reserved'
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
