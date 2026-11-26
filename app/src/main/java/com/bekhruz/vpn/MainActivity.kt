@@ -19,6 +19,12 @@ import android.widget.Toast
 import com.wireguard.android.backend.GoBackend
 import com.wireguard.android.backend.Tunnel
 import com.wireguard.config.Config
+import com.wireguard.crypto.KeyPair
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import java.time.Instant
+import java.util.Base64
 import java.io.ByteArrayInputStream
 
 class MainActivity : Activity() {
@@ -295,14 +301,17 @@ class MainActivity : Activity() {
                     setRequestProperty("Content-Type", "application/json")
                     setRequestProperty("User-Agent", "okhttp/3.12.1")
                 }
-                val responseText = try {
+                val responseCode: Int
+                val responseText: String
+                try {
                     connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
-                    val stream = if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream
-                    stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                    responseCode = connection.responseCode
+                    val stream = if (responseCode in 200..299) connection.inputStream else connection.errorStream
+                    responseText = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
                 } finally {
                     connection.disconnect()
                 }
-                if (connection.responseCode !in 200..299) throw IllegalStateException("Cloudflare: HTTP ${connection.responseCode}")
+                if (responseCode !in 200..299) throw IllegalStateException("Cloudflare: HTTP $responseCode")
                 val response = JSONObject(responseText)
                 val config = response.getJSONObject("config")
                 val iface = config.getJSONObject("interface")
