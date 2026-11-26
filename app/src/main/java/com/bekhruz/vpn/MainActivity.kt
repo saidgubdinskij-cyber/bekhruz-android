@@ -2,10 +2,12 @@ package com.bekhruz.vpn
 
 import android.app.Activity
 import android.content.Intent
+import android.database.Cursor
 import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -18,6 +20,8 @@ class MainActivity : Activity() {
     private val muted = Color.rgb(155, 165, 175)
     private var protocol = "WireGuard"
     private lateinit var status: TextView
+    // Kept in memory only; never write VPN private keys to logs or plain preferences.
+    private var importedConfig: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -89,7 +93,7 @@ class MainActivity : Activity() {
         }, full().apply { topMargin = dp(28) })
 
         root.addView(TextView(this).apply {
-            text = "This is an early interface preview. Importing a file does not start a VPN tunnel. WireGuard and AmneziaWG engines, VPN permission handling and secure config parsing still need to be integrated."
+            text = "Configuration file import and basic WireGuard validation are available. The VPN tunnel engine and Android VPN permission flow still need to be integrated, so importing a file does not connect the VPN yet."
             textSize = 12f
             gravity = Gravity.CENTER
             setTextColor(muted)
@@ -99,6 +103,33 @@ class MainActivity : Activity() {
         root.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
         root.addView(label("BLACK  •  NEON  •  ANDROID").apply { gravity = Gravity.CENTER }, full())
         setContentView(root)
+    }
+
+    private fun readDisplayName(uri: Uri): String {
+        var name = "WireGuard configuration"
+        val cursor: Cursor? = contentResolver.query(uri, null, null, null, null)
+        cursor?.use {
+            val column = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (column >= 0 && it.moveToFirst()) name = it.getString(column) ?: name
+        }
+        return name
+    }
+
+    private fun validateWireGuardConfig(text: String): String? {
+        val hasInterface = Regex("(?im)^\\s*\\[Interface]\\s*$").containsMatchIn(text)
+        val hasPeer = Regex("(?im)^\\s*\\[Peer]\\s*$").containsMatchIn(text)
+        val hasPrivateKey = Regex("(?im)^\\s*PrivateKey\\s*=\\s*\\S+").containsMatchIn(text)
+        val hasAddress = Regex("(?im)^\\s*Address\\s*=\\s*\\S+").containsMatchIn(text)
+        val hasPublicKey = Regex("(?im)^\\s*PublicKey\\s*=\\s*\\S+").containsMatchIn(text)
+
+        return when {
+            !hasInterface -> "Missing [Interface] section"
+            !hasPrivateKey -> "Missing Interface PrivateKey"
+            !hasAddress -> "Missing Interface Address"
+            !hasPeer -> "Missing [Peer] section"
+            !hasPublicKey -> "Missing Peer PublicKey"
+            else -> null
+        }
     }
 
     private fun label(value: String) = TextView(this).apply {
@@ -114,10 +145,30 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated in Android API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 7 && resultCode == RESULT_OK) {
-            val uri: Uri = data?.data ?: return
-            status.text = "Selected: " + (uri.lastPathSegment ?: "configuration")
-            Toast.makeText(this, "File selected for $protocol", Toast.LENGTH_SHORT).show()
+        if (requestCode != 7 || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+
+        try {
+            val configText = contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use {
+                it.readText()
+            } ?: throw IllegalStateException("Could not read the selected file")
+
+            val validationError = validateWireGuardConfig(configText)
+            if (validationError != null) {
+                importedConfig = null
+                status.text = "Invalid WireGuard configuration"
+                Toast.makeText(this, validationError, Toast.LENGTH_LONG).show()
+                return
+            }
+
+            importedConfig = configText
+            val fileName = readDisplayName(uri)
+            status.text = "Imported: $fileName"
+            Toast.makeText(this, "WireGuard configuration imported", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            importedConfig = null
+            status.text = "Could not import configuration"
+            Toast.makeText(this, "File read failed", Toast.LENGTH_LONG).show()
         }
     }
 }
