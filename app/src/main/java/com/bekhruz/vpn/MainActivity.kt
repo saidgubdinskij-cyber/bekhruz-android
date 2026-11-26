@@ -16,6 +16,7 @@ import android.provider.OpenableColumns
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -132,6 +133,12 @@ class MainActivity : Activity() {
             setPadding(dp(22), dp(26), dp(22), dp(20))
             setBackgroundColor(bg)
         }
+
+        root.addView(ImageView(this).apply {
+            setImageResource(R.drawable.bekhruz_emblem)
+            contentDescription = "Эмблема Bekhruz VPN"
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }, LinearLayout.LayoutParams(dp(66), dp(66)).apply { bottomMargin = dp(8) })
 
         root.addView(TextView(this).apply {
             text = "bekhruz"
