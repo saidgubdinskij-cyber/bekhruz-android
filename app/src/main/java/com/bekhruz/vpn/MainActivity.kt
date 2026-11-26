@@ -75,8 +75,8 @@ class MainActivity : Activity() {
             ACTION_TILE_CONNECT -> toggleConnection()
             else -> {
                 // Launching Bekhruz from the Infinix One-Tap button is a connect shortcut.
-                // Do not toggle an already active tunnel off.
-                if (!connected && importedConfig != null) {
+                // One-Tap launch toggles the saved VPN state: connect if off, disconnect if on.
+                if (importedConfig != null) {
                     connectionButton.post { toggleConnection() }
                 }
             }
