@@ -6,7 +6,6 @@ import "C"
 
 import (
     "fmt"
-    "math"
     "net"
     "os"
     "os/signal"
@@ -99,10 +98,10 @@ func wgTurnOn(interfaceName string, tunFd int32, settings string) int32 {
         return -1
     }
     var handle int32
-    for handle = 0; handle < math.MaxInt32; handle++ {
+    for handle = 0; handle < int32(1<<31-1); handle++ {
         if _, exists := tunnelHandles[handle]; !exists { break }
     }
-    if handle == math.MaxInt32 {
+    if handle == int32(1<<31-1) {
         if uapi != nil { uapi.Close() }; dev.Close(); return -1
     }
     tunnelHandles[handle] = TunnelHandle{device: dev, uapi: uapi}
