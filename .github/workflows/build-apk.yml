@@ -21,7 +21,36 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.3'
+
+      - name: Build WARP-aware wireguard-go for Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          NDK="$ANDROID_HOME/ndk/27.2.12479018"
+          TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          git clone --depth 1 https://github.com/bepass-org/warp-plus.git "$RUNNER_TEMP/warp-plus"
+          mkdir -p "$RUNNER_TEMP/warp-plus/androidlibwg"
+          cp app/src/main/go/libwg-go/api-android.go app/src/main/go/libwg-go/jni.c "$RUNNER_TEMP/warp-plus/androidlibwg/"
+          build_one() {
+            local abi="$1" arch="$2" cc="$3"
+            mkdir -p "app/src/main/jniLibs/$abi"
+            export GOOS=android GOARCH="$arch" CGO_ENABLED=1
+            export CC="$TOOLCHAIN/$cc"
+            export CGO_CFLAGS="--target=$("$CC" -dumpmachine) --sysroot=$NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+            export CGO_LDFLAGS="-Wl,-soname,libwg-go.so"
+            if [ "$arch" = "arm" ]; then export GOARM=7; fi
+            (cd "$RUNNER_TEMP/warp-plus/androidlibwg" && go build -tags linux -trimpath -buildvcs=false -ldflags="-X github.com/bepass-org/warp-plus/wireguard/ipc.socketDirectory=/data/data/com.bekhruz.vpn/cache/wireguard -buildid=" -o "$GITHUB_WORKSPACE/app/src/main/jniLibs/$abi/libwg-go.so" -buildmode=c-shared)
+          }
+          build_one arm64-v8a arm64 aarch64-linux-android26-clang
+          build_one armeabi-v7a arm armv7a-linux-androideabi26-clang
+          build_one x86 386 i686-linux-android26-clang
+          build_one x86_64 amd64 x86_64-linux-android26-clang
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
