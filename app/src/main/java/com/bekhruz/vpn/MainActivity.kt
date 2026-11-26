@@ -348,7 +348,7 @@ class MainActivity : Activity() {
                 textSize = 20f
                 setTextColor(neon)
                 gravity = Gravity.CENTER
-                setOnClickListener { renameProfile(file) }
+                setOnClickListener { editProfile(file) }
             }, LinearLayout.LayoutParams(dp(34), dp(42)))
             card.addView(TextView(this).apply {
                 text = "⋮"
@@ -359,6 +359,39 @@ class MainActivity : Activity() {
             }, LinearLayout.LayoutParams(dp(30), dp(42)))
             list.addView(card, full().apply { bottomMargin = dp(8) })
         }
+    }
+
+    private fun editProfile(file: java.io.File) {
+        if (connected) {
+            Toast.makeText(this, "Отключите VPN перед редактированием", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val editor = android.widget.EditText(this).apply {
+            setText(file.readText(Charsets.UTF_8))
+            textSize = 12f
+            typeface = Typeface.MONOSPACE
+            minLines = 12
+            gravity = Gravity.TOP
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        android.app.AlertDialog.Builder(this).setTitle("Редактировать конфигурацию")
+            .setView(editor).setNegativeButton("Отмена", null)
+            .setPositiveButton("Сохранить") { _, _ ->
+                try {
+                    val raw = editor.text.toString().trim() + "\\n"
+                    val parsed = Config.parse(ByteArrayInputStream(raw.toByteArray(Charsets.UTF_8)))
+                    file.writeText(raw, Charsets.UTF_8)
+                    if (file.name == getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString("active_profile_file", null)) {
+                        openFileOutput(CONFIG_FILE, MODE_PRIVATE).use { it.write(raw.toByteArray(Charsets.UTF_8)) }
+                        importedConfig = parsed
+                    }
+                    Toast.makeText(this, "Конфигурация сохранена", Toast.LENGTH_SHORT).show()
+                    refreshProfilesUi()
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Ошибка конфигурации: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }.show()
     }
 
     private fun renameProfile(file: java.io.File) {
@@ -402,7 +435,7 @@ class MainActivity : Activity() {
 
     private fun showAddMenu() {
         android.app.AlertDialog.Builder(this).setTitle("Добавить туннель")
-            .setItems(arrayOf("Импортировать из файла или архива", "Создать профиль Cloudflare WARP")) { _, which ->
+            .setItems(arrayOf("Импортировать файл WireGuard .conf", "Создать профиль Cloudflare WARP")) { _, which ->
                 if (which == 0) {
                     val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                         addCategory(Intent.CATEGORY_OPENABLE)
