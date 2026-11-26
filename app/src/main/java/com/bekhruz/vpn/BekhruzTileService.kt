@@ -14,7 +14,11 @@ class BekhruzTileService : TileService() {
     private val prefs by lazy { getSharedPreferences("bekhruz_settings", MODE_PRIVATE) }
 
     private val tunnel = object : Tunnel {
-        override fun getName(): String = "bekhruz"
+        override fun getName(): String {
+            val warp = prefs.getBoolean("is_warp_profile", false)
+            val reserved = prefs.getString("warp_reserved", null)
+            return if (warp && !reserved.isNullOrBlank()) "bekhruz@reserved=$reserved" else "bekhruz"
+        }
         override fun onStateChange(newState: Tunnel.State) {
             val isUp = newState == Tunnel.State.UP
             prefs.edit().putBoolean("vpn_connected", isUp).apply()
@@ -31,7 +35,7 @@ class BekhruzTileService : TileService() {
         super.onClick()
         val isConnected = prefs.getBoolean("vpn_connected", false)
         val selectedProtocol = prefs.getString("selected_protocol", "WireGuard")
-        if (!isConnected && selectedProtocol == "WARP") {
+        if (selectedProtocol == "WARP") {
             val launch = Intent(this, MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
