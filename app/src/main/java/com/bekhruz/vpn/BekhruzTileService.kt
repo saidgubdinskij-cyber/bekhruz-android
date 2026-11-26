@@ -37,6 +37,7 @@ class BekhruzTileService : TileService() {
         val selectedProtocol = prefs.getString("selected_protocol", "WireGuard")
         if (selectedProtocol == "WARP") {
             val launch = Intent(this, MainActivity::class.java).apply {
+                action = MainActivity.ACTION_TILE_CONNECT
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
             startActivityAndCollapse(launch)
