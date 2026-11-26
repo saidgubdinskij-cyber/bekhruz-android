@@ -79,7 +79,7 @@ class MainActivity : Activity() {
             letterSpacing = .02f
         }, full())
         root.addView(TextView(this).apply {
-            text = "PRIVATE CONNECTION"
+            text = "ЛИЧНОЕ ПОДКЛЮЧЕНИЕ"
             textSize = 10f
             letterSpacing = .32f
             gravity = Gravity.CENTER
@@ -103,7 +103,7 @@ class MainActivity : Activity() {
         }
         stateCard.addView(statusIcon, full())
         engineStatus = TextView(this).apply {
-            text = "VPN DISCONNECTED"
+            text = "VPN ОТКЛЮЧЁН"
             textSize = 14f
             letterSpacing = .12f
             gravity = Gravity.CENTER
@@ -112,7 +112,7 @@ class MainActivity : Activity() {
         }
         stateCard.addView(engineStatus, full().apply { topMargin = dp(8) })
         status = TextView(this).apply {
-            text = if (importedConfig != null) "Saved: ${savedConfigName()}" else "Add a configuration to begin"
+            text = if (importedConfig != null) "Сохранено: ${savedConfigName()}" else "Добавьте конфигурацию для начала"
             textSize = 12f
             gravity = Gravity.CENTER
             setTextColor(muted)
@@ -121,7 +121,7 @@ class MainActivity : Activity() {
         root.addView(stateCard, full().apply { topMargin = dp(34) })
 
         connectionButton = Button(this).apply {
-            text = "CONNECT"
+            text = "ПОДКЛЮЧИТЬСЯ"
             textSize = 15f
             letterSpacing = .08f
             isAllCaps = false
@@ -134,21 +134,21 @@ class MainActivity : Activity() {
         root.addView(connectionButton, full().apply { topMargin = dp(18) })
 
         root.addView(TextView(this).apply {
-            text = "SELECT VPN PROTOCOL"
+            text = "ВЫБЕРИТЕ ПРОТОКОЛ VPN"
             textSize = 11f
             letterSpacing = .15f
             setTextColor(muted)
         }, full().apply { topMargin = dp(30) })
 
         val choices = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        wireGuardButton = protocolButton("WireGuard")
-        warpButton = protocolButton("Cloudflare WARP")
-        amneziaButton = protocolButton("AmneziaWG")
+        wireGuardButton = protocolButton("Вайргард")
+        warpButton = protocolButton("WARP")
+        amneziaButton = protocolButton("Амнезия")
         wireGuardButton.setOnClickListener { selectProtocol("WireGuard") }
         warpButton.setOnClickListener { selectProtocol("WARP") }
         amneziaButton.setOnClickListener {
             selectProtocol("AmneziaWG")
-            status.text = "AmneziaWG engine is not integrated yet"
+            status.text = "Поддержка AmneziaWG ещё не подключена"
         }
         choices.addView(wireGuardButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { rightMargin = dp(5) })
         choices.addView(warpButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(5); rightMargin = dp(5) })
@@ -157,7 +157,7 @@ class MainActivity : Activity() {
         updateProtocolButtons()
 
         val importButton = Button(this).apply {
-            text = "＋   IMPORT CONFIG"
+            text = "＋   ДОБАВИТЬ КОНФИГУРАЦИЮ"
             textSize = 13f
             isAllCaps = false
             setTextColor(neon)
@@ -173,7 +173,7 @@ class MainActivity : Activity() {
         root.addView(importButton, full().apply { topMargin = dp(14) })
 
         root.addView(TextView(this).apply {
-            text = "Your profile is saved on this phone and restored automatically when you reopen bekhruz."
+            text = "Ваша конфигурация сохранена на телефоне и загрузится автоматически при следующем запуске bekhruz."
             textSize = 11f
             gravity = Gravity.CENTER
             setTextColor(muted)
@@ -183,7 +183,7 @@ class MainActivity : Activity() {
         val bottomSpacer = View(this)
         root.addView(bottomSpacer, LinearLayout.LayoutParams(1, 0, 1f))
         root.addView(TextView(this).apply {
-            text = "SECURE  •  PRIVATE  •  BEKHRUZ"
+            text = "ЗАЩИТА  •  ПРИВАТНОСТЬ  •  BEKHRUZ"
             textSize = 10f
             letterSpacing = .18f
             gravity = Gravity.CENTER
@@ -199,11 +199,11 @@ class MainActivity : Activity() {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_PROTOCOL, protocol).apply()
         updateProtocolButtons()
         if (value == "WARP" && isWarpConfig) {
-            status.text = "Cloudflare WARP profile: ${savedConfigName()}"
+            status.text = "Профиль WARP: ${savedConfigName()}"
         } else if (value == "AmneziaWG") {
-            status.text = "AmneziaWG engine is not integrated yet"
+            status.text = "Поддержка AmneziaWG ещё не подключена"
         } else if (importedConfig != null) {
-            status.text = "Saved: ${savedConfigName()}"
+            status.text = "Сохранено: ${savedConfigName()}"
         }
         updateConnectionUi()
     }
@@ -225,11 +225,11 @@ class MainActivity : Activity() {
             return
         }
         if (protocol == "AmneziaWG") {
-            status.text = "AmneziaWG engine is not integrated yet"
+            status.text = "Поддержка AmneziaWG ещё не подключена"
             return
         }
         if (importedConfig == null) {
-            status.text = "Import a .conf profile first"
+            status.text = "Сначала добавьте файл конфигурации .conf"
             return
         }
         val permissionIntent = VpnService.prepare(this)
@@ -249,15 +249,15 @@ class MainActivity : Activity() {
                     connected = true
                     busy = false
                     status.text = if (protocol == "WARP") {
-                        "WARP tunnel started. Reserved-byte routing may be unavailable."
-                    } else "WireGuard tunnel is active"
+                        "Туннель WARP запущен. Маршрутизация Reserved может быть недоступна."
+                    } else "Туннель WireGuard работает"
                     updateConnectionUi()
                 }
             } catch (e: Exception) {
                 runOnUiThread {
                     connected = false
                     busy = false
-                    status.text = e.message?.take(120) ?: "Could not start VPN"
+                    status.text = e.message?.take(120) ?: "Не удалось запустить VPN"
                     updateConnectionUi()
                 }
             }
@@ -278,13 +278,13 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     connected = false
                     busy = false
-                    status.text = "VPN tunnel stopped"
+                    status.text = "VPN отключён"
                     updateConnectionUi()
                 }
             } catch (e: Exception) {
                 runOnUiThread {
                     busy = false
-                    status.text = e.message?.take(120) ?: "Could not stop VPN"
+                    status.text = e.message?.take(120) ?: "Не удалось отключить VPN"
                     updateConnectionUi()
                 }
             }
@@ -294,17 +294,17 @@ class MainActivity : Activity() {
     private fun updateConnectionUi() {
         if (!::connectionButton.isInitialized) return
         connectionButton.text = when {
-            busy -> "PLEASE WAIT…"
-            connected -> "DISCONNECT"
-            else -> "CONNECT"
+            busy -> "ПОДОЖДИТЕ…"
+            connected -> "ОТКЛЮЧИТЬСЯ"
+            else -> "ПОДКЛЮЧИТЬСЯ"
         }
         connectionButton.isEnabled = !busy && (protocol != "AmneziaWG" || connected)
         connectionButton.background = rounded(if (connected) Color.rgb(255, 100, 90) else neon, 18)
         if (::engineStatus.isInitialized) {
             engineStatus.text = when {
-                busy -> "VPN CONNECTING"
-                connected -> "VPN CONNECTED"
-                else -> "VPN DISCONNECTED"
+                busy -> "VPN ПОДКЛЮЧАЕТСЯ"
+                connected -> "VPN ПОДКЛЮЧЁН"
+                else -> "VPN ОТКЛЮЧЁН"
             }
             engineStatus.setTextColor(if (connected) neon else warning)
         }
@@ -369,7 +369,7 @@ class MainActivity : Activity() {
 
         try {
             val raw = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
-                ?: throw IllegalStateException("Could not read selected file")
+                ?: throw IllegalStateException("Не удалось прочитать выбранный файл")
             val reservedMatch = Regex("(?im)^\\s*#?\\s*Reserved\\s*=\\s*([0-9\\s,]+)").find(raw)
             val reserved = reservedMatch?.groupValues?.get(1)?.trim()
             val normalized = raw.lines().filterNot {
@@ -391,16 +391,16 @@ class MainActivity : Activity() {
             warpReserved = reserved
             if (detectedWarp) protocol = "WARP"
             updateProtocolButtons()
-            status.text = if (detectedWarp) "WARP profile saved: $displayName" else "Saved: $displayName"
-            Toast.makeText(this, "Configuration saved on this device", Toast.LENGTH_SHORT).show()
+            status.text = if (detectedWarp) "Профиль WARP сохранён: $displayName" else "Сохранено: $displayName"
+            Toast.makeText(this, "Конфигурация сохранена на устройстве", Toast.LENGTH_SHORT).show()
             if (detectedWarp && !reserved.isNullOrBlank()) {
-                engineStatus.text = "WARP PROFILE • RESERVED TAG FOUND"
-                status.text = "WARP profile saved. Reserved tag: $reserved"
+                engineStatus.text = "ПРОФИЛЬ WARP • RESERVED НАЙДЕН"
+                status.text = "Профиль WARP сохранён. Reserved: $reserved"
             }
         } catch (e: Exception) {
             importedConfig = null
-            status.text = "Invalid config: ${e.message?.take(100) ?: "check .conf file"}"
-            Toast.makeText(this, "Could not import this VPN profile", Toast.LENGTH_LONG).show()
+            status.text = "Ошибка конфигурации: ${e.message?.take(100) ?: "проверьте файл .conf"}"
+            Toast.makeText(this, "Не удалось добавить конфигурацию VPN", Toast.LENGTH_LONG).show()
         }
         updateConnectionUi()
     }
