@@ -7,6 +7,9 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.VpnService
+import android.net.TrafficStats
+import android.os.Handler
+import android.os.Looper
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -35,6 +38,10 @@ class MainActivity : Activity() {
     private val warning = Color.rgb(255, 190, 90)
     private var protocol = "WireGuard"
     private lateinit var status: TextView
+    private lateinit var speedStatus: TextView
+    private val speedHandler = Handler(Looper.getMainLooper())
+    private var lastRxBytes = TrafficStats.getTotalRxBytes()
+    private var lastTxBytes = TrafficStats.getTotalTxBytes()
     private lateinit var engineStatus: TextView
     private lateinit var connectionButton: Button
     private lateinit var wireGuardButton: Button
@@ -71,16 +78,7 @@ class MainActivity : Activity() {
         restoreSavedConfiguration()
         connected = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_CONNECTED, false)
         render()
-        when (intent?.action) {
-            ACTION_TILE_CONNECT -> toggleConnection()
-            else -> {
-                // Launching Bekhruz from the Infinix One-Tap button is a connect shortcut.
-                // One-Tap launch toggles the saved VPN state: connect if off, disconnect if on.
-                if (importedConfig != null) {
-                    connectionButton.post { toggleConnection() }
-                }
-            }
-        }
+        if (intent?.action == ACTION_TILE_CONNECT) toggleConnection()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -94,7 +92,37 @@ class MainActivity : Activity() {
         if (::connectionButton.isInitialized) {
             connected = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_CONNECTED, connected)
             updateConnectionUi()
+            lastRxBytes = TrafficStats.getTotalRxBytes()
+            lastTxBytes = TrafficStats.getTotalTxBytes()
+            speedHandler.removeCallbacks(speedRunnable)
+            speedHandler.post(speedRunnable)
         }
+    }
+
+    override fun onPause() {
+        speedHandler.removeCallbacks(speedRunnable)
+        super.onPause()
+    }
+
+    private val speedRunnable = object : Runnable {
+        override fun run() {
+            val rx = TrafficStats.getTotalRxBytes()
+            val tx = TrafficStats.getTotalTxBytes()
+            val down = if (rx >= lastRxBytes && lastRxBytes >= 0) rx - lastRxBytes else 0L
+            val up = if (tx >= lastTxBytes && lastTxBytes >= 0) tx - lastTxBytes else 0L
+            lastRxBytes = rx
+            lastTxBytes = tx
+            if (::speedStatus.isInitialized) {
+                speedStatus.text = "↓ " + formatSpeed(down) + "     ↑ " + formatSpeed(up)
+            }
+            speedHandler.postDelayed(this, 1000)
+        }
+    }
+
+    private fun formatSpeed(bytesPerSecond: Long): String {
+        val kb = bytesPerSecond / 1024.0
+        return if (kb >= 1024) String.format(java.util.Locale.US, "%.2f МБ/с", kb / 1024)
+        else String.format(java.util.Locale.US, "%.0f КБ/с", kb)
     }
 
     private fun render() {
@@ -153,6 +181,14 @@ class MainActivity : Activity() {
             setTextColor(muted)
         }
         stateCard.addView(status, full().apply { topMargin = dp(8) })
+        speedStatus = TextView(this).apply {
+            text = "↓ 0 КБ/с     ↑ 0 КБ/с"
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setTextColor(neon)
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        stateCard.addView(speedStatus, full().apply { topMargin = dp(14) })
         root.addView(stateCard, full().apply { topMargin = dp(34) })
 
         connectionButton = Button(this).apply {
