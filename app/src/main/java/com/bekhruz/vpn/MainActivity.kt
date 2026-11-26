@@ -5,6 +5,7 @@ import android.content.Intent
 import android.database.Cursor
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.net.VpnService
 import android.net.Uri
 import android.os.Bundle
@@ -21,16 +22,24 @@ import com.wireguard.config.Config
 import java.io.ByteArrayInputStream
 
 class MainActivity : Activity() {
-    private val neon = Color.rgb(0, 245, 160)
-    private val muted = Color.rgb(155, 165, 175)
+    private val bg = Color.rgb(5, 8, 9)
+    private val panel = Color.rgb(17, 25, 25)
+    private val neon = Color.rgb(0, 239, 155)
+    private val muted = Color.rgb(150, 165, 164)
+    private val warning = Color.rgb(255, 190, 90)
     private var protocol = "WireGuard"
     private lateinit var status: TextView
     private lateinit var engineStatus: TextView
     private lateinit var connectionButton: Button
+    private lateinit var wireGuardButton: Button
+    private lateinit var warpButton: Button
+    private lateinit var amneziaButton: Button
     private var importedConfig: Config? = null
     private var backend: GoBackend? = null
     private var connected = false
     private var busy = false
+    private var isWarpConfig = false
+    private var warpReserved: String? = null
 
     private val tunnel = object : Tunnel {
         override fun getName(): String = "bekhruz"
@@ -45,8 +54,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = Color.rgb(5, 6, 8)
-        window.navigationBarColor = Color.rgb(5, 6, 8)
+        window.statusBarColor = bg
+        window.navigationBarColor = bg
         protocol = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .getString(KEY_PROTOCOL, "WireGuard") ?: "WireGuard"
         restoreSavedConfiguration()
@@ -57,95 +66,156 @@ class MainActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(24), dp(36), dp(24), dp(24))
-            setBackgroundColor(Color.rgb(5, 6, 8))
+            setPadding(dp(22), dp(26), dp(22), dp(20))
+            setBackgroundColor(bg)
         }
+
         root.addView(TextView(this).apply {
             text = "bekhruz"
-            textSize = 34f
+            textSize = 36f
             gravity = Gravity.CENTER
             setTextColor(neon)
             typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
+            letterSpacing = .02f
         }, full())
         root.addView(TextView(this).apply {
             text = "PRIVATE CONNECTION"
-            textSize = 11f
-            letterSpacing = .22f
+            textSize = 10f
+            letterSpacing = .32f
             gravity = Gravity.CENTER
             setTextColor(muted)
         }, full())
 
-        root.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
-        root.addView(label("VPN PROTOCOL"), full())
+        val topSpacer = View(this)
+        root.addView(topSpacer, LinearLayout.LayoutParams(1, 0, 1f))
 
-        val choices = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val wg = button("WireGuard")
-        val awg = button("AmneziaWG")
-        fun updateChoice() {
-            listOf(wg to "WireGuard", awg to "AmneziaWG").forEach { (b, p) ->
-                b.setTextColor(if (protocol == p) Color.BLACK else neon)
-                b.setBackgroundColor(if (protocol == p) neon else Color.rgb(22, 28, 30))
-            }
+        val stateCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(18), dp(20), dp(18), dp(20))
+            background = rounded(panel, 22)
         }
-        wg.setOnClickListener {
-            protocol = "WireGuard"
-            saveProtocol()
-            updateChoice()
-            updateConnectionUi()
-        }
-        awg.setOnClickListener {
-            protocol = "AmneziaWG"
-            saveProtocol()
-            updateChoice()
-            updateConnectionUi()
-            if (importedConfig != null) {
-                status.text = "AmneziaWG engine is not installed yet"
-            }
-        }
-        choices.addView(wg, LinearLayout.LayoutParams(0, dp(48), 1f).apply { rightMargin = dp(6) })
-        choices.addView(awg, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(6) })
-        root.addView(choices, full())
-        updateChoice()
-
-        val import = button("IMPORT CONFIGURATION")
-        import.setOnClickListener {
-            val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                addCategory(Intent.CATEGORY_OPENABLE)
-                type = "*/*"
-            }
-            startActivityForResult(pick, REQUEST_CONFIG)
-        }
-        root.addView(import, full().apply { topMargin = dp(24) })
-
-        status = label(
-            if (importedConfig != null) "Saved: ${savedConfigName()}" else "No configuration selected"
-        ).apply { gravity = Gravity.CENTER }
-        root.addView(status, full().apply { topMargin = dp(12) })
-
-        engineStatus = TextView(this).apply {
-            text = "VPN ENGINE READY"
-            textSize = 13f
+        val statusIcon = TextView(this).apply {
+            text = "●"
+            textSize = 38f
             gravity = Gravity.CENTER
             setTextColor(neon)
         }
-        root.addView(engineStatus, full().apply { topMargin = dp(28) })
-
-        connectionButton = button("CONNECT")
-        connectionButton.setOnClickListener { toggleConnection() }
-        root.addView(connectionButton, full().apply { topMargin = dp(20) })
-
-        root.addView(TextView(this).apply {
-            text = "Import a valid WireGuard .conf file, then tap CONNECT. Android will ask you to approve the VPN connection. Your configuration stays on this device."
+        stateCard.addView(statusIcon, full())
+        engineStatus = TextView(this).apply {
+            text = "VPN DISCONNECTED"
+            textSize = 14f
+            letterSpacing = .12f
+            gravity = Gravity.CENTER
+            setTextColor(warning)
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        stateCard.addView(engineStatus, full().apply { topMargin = dp(8) })
+        status = TextView(this).apply {
+            text = if (importedConfig != null) "Saved: ${savedConfigName()}" else "Add a configuration to begin"
             textSize = 12f
             gravity = Gravity.CENTER
             setTextColor(muted)
-            setLineSpacing(dp(3).toFloat(), 1f)
-        }, full().apply { topMargin = dp(16) })
+        }
+        stateCard.addView(status, full().apply { topMargin = dp(8) })
+        root.addView(stateCard, full().apply { topMargin = dp(34) })
 
-        root.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
-        root.addView(label("BLACK  •  NEON  •  ANDROID").apply { gravity = Gravity.CENTER }, full())
+        connectionButton = Button(this).apply {
+            text = "CONNECT"
+            textSize = 15f
+            letterSpacing = .08f
+            isAllCaps = false
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.BLACK)
+            background = rounded(neon, 18)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            setOnClickListener { toggleConnection() }
+        }
+        root.addView(connectionButton, full().apply { topMargin = dp(18) })
+
+        root.addView(TextView(this).apply {
+            text = "SELECT VPN PROTOCOL"
+            textSize = 11f
+            letterSpacing = .15f
+            setTextColor(muted)
+        }, full().apply { topMargin = dp(30) })
+
+        val choices = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        wireGuardButton = protocolButton("WireGuard")
+        warpButton = protocolButton("Cloudflare WARP")
+        amneziaButton = protocolButton("AmneziaWG")
+        wireGuardButton.setOnClickListener { selectProtocol("WireGuard") }
+        warpButton.setOnClickListener { selectProtocol("WARP") }
+        amneziaButton.setOnClickListener {
+            selectProtocol("AmneziaWG")
+            status.text = "AmneziaWG engine is not integrated yet"
+        }
+        choices.addView(wireGuardButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { rightMargin = dp(5) })
+        choices.addView(warpButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(5); rightMargin = dp(5) })
+        choices.addView(amneziaButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(5) })
+        root.addView(choices, full().apply { topMargin = dp(10) })
+        updateProtocolButtons()
+
+        val importButton = Button(this).apply {
+            text = "＋   IMPORT CONFIG"
+            textSize = 13f
+            isAllCaps = false
+            setTextColor(neon)
+            background = rounded(panel, 16)
+            setOnClickListener {
+                val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "*/*"
+                }
+                startActivityForResult(pick, REQUEST_CONFIG)
+            }
+        }
+        root.addView(importButton, full().apply { topMargin = dp(14) })
+
+        root.addView(TextView(this).apply {
+            text = "Your profile is saved on this phone and restored automatically when you reopen bekhruz."
+            textSize = 11f
+            gravity = Gravity.CENTER
+            setTextColor(muted)
+            setLineSpacing(dp(3).toFloat(), 1f)
+        }, full().apply { topMargin = dp(14) })
+
+        val bottomSpacer = View(this)
+        root.addView(bottomSpacer, LinearLayout.LayoutParams(1, 0, 1f))
+        root.addView(TextView(this).apply {
+            text = "SECURE  •  PRIVATE  •  BEKHRUZ"
+            textSize = 10f
+            letterSpacing = .18f
+            gravity = Gravity.CENTER
+            setTextColor(muted)
+        }, full())
+
         setContentView(root)
         updateConnectionUi()
+    }
+
+    private fun selectProtocol(value: String) {
+        protocol = value
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_PROTOCOL, protocol).apply()
+        updateProtocolButtons()
+        if (value == "WARP" && isWarpConfig) {
+            status.text = "Cloudflare WARP profile: ${savedConfigName()}"
+        } else if (value == "AmneziaWG") {
+            status.text = "AmneziaWG engine is not integrated yet"
+        } else if (importedConfig != null) {
+            status.text = "Saved: ${savedConfigName()}"
+        }
+        updateConnectionUi()
+    }
+
+    private fun updateProtocolButtons() {
+        if (!::wireGuardButton.isInitialized) return
+        listOf(wireGuardButton to "WireGuard", warpButton to "WARP", amneziaButton to "AmneziaWG")
+            .forEach { (button, value) ->
+                val selected = protocol == value
+                button.setTextColor(if (selected) Color.BLACK else neon)
+                button.background = rounded(if (selected) neon else panel, 12)
+            }
     }
 
     private fun toggleConnection() {
@@ -154,29 +224,23 @@ class MainActivity : Activity() {
             disconnectTunnel()
             return
         }
-        if (protocol != "WireGuard") {
-            status.text = "AmneziaWG support is not integrated yet"
+        if (protocol == "AmneziaWG") {
+            status.text = "AmneziaWG engine is not integrated yet"
             return
         }
         if (importedConfig == null) {
-            status.text = "Import a WireGuard configuration first"
+            status.text = "Import a .conf profile first"
             return
         }
-
         val permissionIntent = VpnService.prepare(this)
-        if (permissionIntent != null) {
-            startActivityForResult(permissionIntent, REQUEST_VPN_PERMISSION)
-        } else {
-            connectTunnel()
-        }
+        if (permissionIntent != null) startActivityForResult(permissionIntent, REQUEST_VPN_PERMISSION)
+        else connectTunnel()
     }
 
     private fun connectTunnel() {
         val config = importedConfig ?: return
         busy = true
         updateConnectionUi()
-        engineStatus.text = "CONNECTING…"
-
         Thread {
             try {
                 val activeBackend = backend ?: GoBackend(applicationContext).also { backend = it }
@@ -184,16 +248,16 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     connected = true
                     busy = false
-                    engineStatus.text = "VPN CONNECTED"
-                    status.text = "WireGuard tunnel is active"
+                    status.text = if (protocol == "WARP") {
+                        "WARP tunnel started. Reserved-byte routing may be unavailable."
+                    } else "WireGuard tunnel is active"
                     updateConnectionUi()
                 }
             } catch (e: Exception) {
                 runOnUiThread {
                     connected = false
                     busy = false
-                    engineStatus.text = "CONNECTION FAILED"
-                    status.text = e.message?.take(110) ?: "Could not start WireGuard"
+                    status.text = e.message?.take(120) ?: "Could not start VPN"
                     updateConnectionUi()
                 }
             }
@@ -201,30 +265,26 @@ class MainActivity : Activity() {
     }
 
     private fun disconnectTunnel() {
-        val activeBackend = backend
-        if (activeBackend == null) {
+        val activeBackend = backend ?: run {
             connected = false
             updateConnectionUi()
             return
         }
         busy = true
         updateConnectionUi()
-        engineStatus.text = "DISCONNECTING…"
         Thread {
             try {
                 activeBackend.setState(tunnel, Tunnel.State.DOWN, null)
                 runOnUiThread {
                     connected = false
                     busy = false
-                    engineStatus.text = "VPN DISCONNECTED"
-                    status.text = "Tunnel stopped"
+                    status.text = "VPN tunnel stopped"
                     updateConnectionUi()
                 }
             } catch (e: Exception) {
                 runOnUiThread {
                     busy = false
-                    engineStatus.text = "DISCONNECT FAILED"
-                    status.text = e.message?.take(110) ?: "Could not stop tunnel"
+                    status.text = e.message?.take(120) ?: "Could not stop VPN"
                     updateConnectionUi()
                 }
             }
@@ -238,14 +298,15 @@ class MainActivity : Activity() {
             connected -> "DISCONNECT"
             else -> "CONNECT"
         }
-        connectionButton.isEnabled = !busy && (protocol == "WireGuard" || connected)
+        connectionButton.isEnabled = !busy && (protocol != "AmneziaWG" || connected)
+        connectionButton.background = rounded(if (connected) Color.rgb(255, 100, 90) else neon, 18)
         if (::engineStatus.isInitialized) {
             engineStatus.text = when {
-                busy -> "VPN WORKING…"
+                busy -> "VPN CONNECTING"
                 connected -> "VPN CONNECTED"
-                else -> "VPN ENGINE READY"
+                else -> "VPN DISCONNECTED"
             }
-            engineStatus.setTextColor(if (connected) neon else Color.rgb(255, 190, 80))
+            engineStatus.setTextColor(if (connected) neon else warning)
         }
     }
 
@@ -253,27 +314,22 @@ class MainActivity : Activity() {
         try {
             val file = getFileStreamPath(CONFIG_FILE)
             if (!file.exists()) return
-            val configText = openFileInput(CONFIG_FILE).bufferedReader(Charsets.UTF_8).use { it.readText() }
-            importedConfig = Config.parse(
-                ByteArrayInputStream(configText.toByteArray(Charsets.UTF_8))
-            )
+            val text = openFileInput(CONFIG_FILE).bufferedReader(Charsets.UTF_8).use { it.readText() }
+            isWarpConfig = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_IS_WARP, false)
+            warpReserved = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(KEY_WARP_RESERVED, null)
+            importedConfig = Config.parse(ByteArrayInputStream(text.toByteArray(Charsets.UTF_8)))
+            if (isWarpConfig) protocol = "WARP"
         } catch (_: Exception) {
             importedConfig = null
         }
     }
 
-    private fun saveProtocol() {
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-            .putString(KEY_PROTOCOL, protocol)
-            .apply()
-    }
-
     private fun savedConfigName(): String =
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            .getString(KEY_CONFIG_NAME, "WireGuard configuration") ?: "WireGuard configuration"
+            .getString(KEY_CONFIG_NAME, "VPN configuration") ?: "VPN configuration"
 
     private fun readDisplayName(uri: Uri): String {
-        var name = "WireGuard configuration"
+        var name = "VPN configuration"
         val cursor: Cursor? = contentResolver.query(uri, null, null, null, null)
         cursor?.use {
             val column = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -282,29 +338,28 @@ class MainActivity : Activity() {
         return name
     }
 
-    private fun label(value: String) = TextView(this).apply {
+    private fun protocolButton(value: String) = Button(this).apply {
         text = value
-        textSize = 12f
-        letterSpacing = .08f
-        setTextColor(muted)
-    }
-
-    private fun button(value: String) = Button(this).apply {
-        text = value
-        textSize = 12f
+        textSize = 10f
         isAllCaps = false
         setTextColor(neon)
-        setBackgroundColor(Color.rgb(22, 28, 30))
+        background = rounded(panel, 12)
+        minWidth = 0
+        setPadding(dp(3), 0, dp(3), 0)
+    }
+
+    private fun rounded(color: Int, radius: Int) = GradientDrawable().apply {
+        setColor(color)
+        cornerRadius = dp(radius).toFloat()
     }
 
     private fun full() = LinearLayout.LayoutParams(-1, -2)
-    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     @Deprecated("Deprecated in Android API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (resultCode != RESULT_OK) return
-
         if (requestCode == REQUEST_VPN_PERMISSION) {
             connectTunnel()
             return
@@ -313,27 +368,39 @@ class MainActivity : Activity() {
         val uri = data?.data ?: return
 
         try {
-            val configText = contentResolver.openInputStream(uri)?.use { input ->
-                input.readBytes().toString(Charsets.UTF_8)
-            } ?: throw IllegalStateException("Could not read selected file")
-
-            val parsed = Config.parse(ByteArrayInputStream(configText.toByteArray(Charsets.UTF_8)))
+            val raw = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                ?: throw IllegalStateException("Could not read selected file")
+            val reservedMatch = Regex("(?im)^\\s*#?\\s*Reserved\\s*=\\s*([0-9\\s,]+)").find(raw)
+            val reserved = reservedMatch?.groupValues?.get(1)?.trim()
+            val normalized = raw.lines().filterNot {
+                it.trim().matches(Regex("(?i)^#?\\s*Reserved\\s*=.*$"))
+            }.joinToString("\n")
+            val detectedWarp = raw.contains("cloudflare", ignoreCase = true) ||
+                raw.contains("162.159.") || raw.contains("2606:4700:") || reservedMatch != null
+            val parsed = Config.parse(ByteArrayInputStream(normalized.toByteArray(Charsets.UTF_8)))
             val displayName = readDisplayName(uri)
-            // Keep the configuration in app-private storage so it survives app restarts and reboots.
-            openFileOutput(CONFIG_FILE, MODE_PRIVATE).use { it.write(configText.toByteArray(Charsets.UTF_8)) }
+            openFileOutput(CONFIG_FILE, MODE_PRIVATE).use { it.write(normalized.toByteArray(Charsets.UTF_8)) }
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putString(KEY_CONFIG_NAME, displayName)
-                .putString(KEY_PROTOCOL, protocol)
+                .putString(KEY_PROTOCOL, if (detectedWarp) "WARP" else protocol)
+                .putBoolean(KEY_IS_WARP, detectedWarp)
+                .putString(KEY_WARP_RESERVED, reserved)
                 .apply()
             importedConfig = parsed
-            status.text = "Saved: $displayName"
-            engineStatus.text = "CONFIGURATION SAVED"
+            isWarpConfig = detectedWarp
+            warpReserved = reserved
+            if (detectedWarp) protocol = "WARP"
+            updateProtocolButtons()
+            status.text = if (detectedWarp) "WARP profile saved: $displayName" else "Saved: $displayName"
             Toast.makeText(this, "Configuration saved on this device", Toast.LENGTH_SHORT).show()
+            if (detectedWarp && !reserved.isNullOrBlank()) {
+                engineStatus.text = "WARP PROFILE • RESERVED TAG FOUND"
+                status.text = "WARP profile saved. Reserved tag: $reserved"
+            }
         } catch (e: Exception) {
             importedConfig = null
-            status.text = "Invalid config: ${e.message?.take(90) ?: "check .conf file"}"
-            engineStatus.text = "CONFIGURATION ERROR"
-            Toast.makeText(this, "Could not read this WireGuard config", Toast.LENGTH_LONG).show()
+            status.text = "Invalid config: ${e.message?.take(100) ?: "check .conf file"}"
+            Toast.makeText(this, "Could not import this VPN profile", Toast.LENGTH_LONG).show()
         }
         updateConnectionUi()
     }
@@ -344,6 +411,8 @@ class MainActivity : Activity() {
         private const val PREFS_NAME = "bekhruz_settings"
         private const val KEY_PROTOCOL = "selected_protocol"
         private const val KEY_CONFIG_NAME = "saved_config_name"
-        private const val CONFIG_FILE = "saved_wireguard.conf"
+        private const val KEY_IS_WARP = "is_warp_profile"
+        private const val KEY_WARP_RESERVED = "warp_reserved"
+        private const val CONFIG_FILE = "saved_vpn.conf"
     }
 }
