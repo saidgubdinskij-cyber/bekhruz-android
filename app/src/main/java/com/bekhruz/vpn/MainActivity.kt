@@ -717,7 +717,7 @@ PersistentKeepalive = 25
                 raw.contains("162.159.") || raw.contains("2606:4700:") || reservedMatch != null
             val parsed = Config.parse(ByteArrayInputStream(normalized.toByteArray(Charsets.UTF_8)))
             val displayName = readDisplayName(uri)
-            openFileOutput(CONFIG_FILE, MODE_PRIVATE).use { it.write(normalized.toByteArray(Charsets.UTF_8)) }
+            saveProfile(displayName.substringBeforeLast('.'), normalized, detectedWarp, reserved)
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putString(KEY_CONFIG_NAME, displayName)
                 .putString(KEY_PROTOCOL, if (detectedWarp) "WARP" else protocol)
