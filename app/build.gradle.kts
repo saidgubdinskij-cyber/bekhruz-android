@@ -27,4 +27,16 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDir("src/main/jniLibs")
+        }
+    }
+
+    packaging {
+        jniLibs {
+            pickFirsts += "**/libwg-go.so"
+        }
+    }
 }
