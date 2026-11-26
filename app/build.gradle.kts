@@ -3,6 +3,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+dependencies {
+    implementation("com.wireguard.android:tunnel:1.0.20230706")
+}
+
 android {
     namespace = "com.bekhruz.vpn"
     compileSdk = 35
