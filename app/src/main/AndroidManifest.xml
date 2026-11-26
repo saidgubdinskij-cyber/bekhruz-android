@@ -5,7 +5,9 @@
 
     <application
         android:allowBackup="false"
-        android:label="bekhruz"
+        android:label="Bekhruz VPN"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:supportsRtl="true">
         <activity
@@ -19,8 +21,8 @@
 
         <service
             android:name=".BekhruzTileService"
-            android:label="bekhruz"
-            android:icon="@android:drawable/ic_lock_lock"
+            android:label="Bekhruz VPN"
+            android:icon="@drawable/bekhruz_emblem"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:exported="true">
             <intent-filter>
