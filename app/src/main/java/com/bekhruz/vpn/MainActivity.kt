@@ -49,8 +49,7 @@ class MainActivity : Activity() {
             setTextColor(muted)
         }, full())
 
-        val gap = View(this)
-        root.addView(gap, LinearLayout.LayoutParams(1, 0, 1f))
+        root.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
 
         root.addView(label("VPN PROTOCOL"), full())
         val choices = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -97,7 +96,7 @@ class MainActivity : Activity() {
             setLineSpacing(dp(3).toFloat(), 1f)
         }, full().apply { topMargin = dp(12) })
 
-        root.addView(gap, LinearLayout.LayoutParams(1, 0, 1f))
+        root.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
         root.addView(label("BLACK  •  NEON  •  ANDROID").apply { gravity = Gravity.CENTER }, full())
         setContentView(root)
     }
