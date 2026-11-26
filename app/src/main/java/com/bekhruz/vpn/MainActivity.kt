@@ -129,157 +129,299 @@ class MainActivity : Activity() {
     private fun render() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(22), dp(26), dp(22), dp(20))
+            setPadding(dp(20), dp(24), dp(20), dp(20))
             setBackgroundColor(bg)
         }
-
-        root.addView(ImageView(this).apply {
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        header.addView(ImageView(this).apply {
             setImageResource(R.drawable.bekhruz_emblem)
-            contentDescription = "Эмблема Bekhruz VPN"
-            scaleType = ImageView.ScaleType.FIT_CENTER
-        }, LinearLayout.LayoutParams(dp(66), dp(66)).apply { bottomMargin = dp(8) })
-
-        root.addView(TextView(this).apply {
-            text = "bekhruz"
-            textSize = 36f
-            gravity = Gravity.CENTER
+            contentDescription = "Bek01"
+        }, LinearLayout.LayoutParams(dp(42), dp(42)))
+        header.addView(TextView(this).apply {
+            text = "Bek01"
+            textSize = 27f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            setPadding(dp(12), 0, 0, 0)
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(TextView(this).apply {
+            text = "⋮"
+            textSize = 28f
             setTextColor(neon)
-            typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
-            letterSpacing = .02f
-        }, full())
-        root.addView(TextView(this).apply {
-            text = "ЛИЧНОЕ ПОДКЛЮЧЕНИЕ"
-            textSize = 10f
-            letterSpacing = .32f
             gravity = Gravity.CENTER
-            setTextColor(muted)
-        }, full())
+            setOnClickListener { showAppMenu() }
+        }, LinearLayout.LayoutParams(dp(40), dp(44)))
+        root.addView(header, full())
 
-        val topSpacer = View(this)
-        root.addView(topSpacer, LinearLayout.LayoutParams(1, 0, 1f))
+        root.addView(TextView(this).apply {
+            text = "ТУННЕЛИ"
+            textSize = 11f
+            letterSpacing = .16f
+            setTextColor(muted)
+        }, full().apply { topMargin = dp(28); bottomMargin = dp(10) })
+
+        val profileList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        profilesContainer = profileList
+        root.addView(profileList, full())
+
+        val addButton = Button(this).apply {
+            text = "＋  Добавить туннель"
+            textSize = 14f
+            isAllCaps = false
+            setTextColor(neon)
+            background = rounded(panel, 14)
+            setOnClickListener { showAddMenu() }
+        }
+        root.addView(addButton, full().apply { topMargin = dp(14) })
 
         val stateCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(18), dp(20), dp(18), dp(20))
-            background = rounded(panel, 22)
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            background = rounded(panel, 16)
         }
-        val statusIcon = TextView(this).apply {
-            text = "●"
-            textSize = 38f
-            gravity = Gravity.CENTER
-            setTextColor(neon)
-        }
-        stateCard.addView(statusIcon, full())
         engineStatus = TextView(this).apply {
-            text = "VPN ОТКЛЮЧЁН"
-            textSize = 14f
-            letterSpacing = .12f
-            gravity = Gravity.CENTER
+            textSize = 13f
             setTextColor(warning)
             typeface = Typeface.DEFAULT_BOLD
         }
-        stateCard.addView(engineStatus, full().apply { topMargin = dp(8) })
+        stateCard.addView(engineStatus, full())
         status = TextView(this).apply {
-            text = if (importedConfig != null) "Сохранено: ${savedConfigName()}" else "Добавьте конфигурацию для начала"
             textSize = 12f
-            gravity = Gravity.CENTER
             setTextColor(muted)
+            setPadding(0, dp(7), 0, 0)
         }
-        stateCard.addView(status, full().apply { topMargin = dp(8) })
+        stateCard.addView(status, full())
         speedStatus = TextView(this).apply {
             text = "↓ 0 КБ/с     ↑ 0 КБ/с"
             textSize = 13f
-            gravity = Gravity.CENTER
             setTextColor(neon)
             typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dp(10), 0, 0)
         }
-        stateCard.addView(speedStatus, full().apply { topMargin = dp(14) })
-        root.addView(stateCard, full().apply { topMargin = dp(34) })
+        stateCard.addView(speedStatus, full())
+        root.addView(stateCard, full().apply { topMargin = dp(18) })
 
-        connectionButton = Button(this).apply {
-            text = "ПОДКЛЮЧИТЬСЯ"
-            textSize = 15f
-            letterSpacing = .08f
-            isAllCaps = false
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.BLACK)
-            background = rounded(neon, 18)
-            setPadding(dp(12), dp(10), dp(12), dp(10))
-            setOnClickListener { toggleConnection() }
-        }
-        root.addView(connectionButton, full().apply { topMargin = dp(18) })
-
-        root.addView(TextView(this).apply {
-            text = "ВЫБЕРИТЕ ПРОТОКОЛ VPN"
-            textSize = 11f
-            letterSpacing = .15f
-            setTextColor(muted)
-        }, full().apply { topMargin = dp(30) })
-
-        val choices = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        wireGuardButton = protocolButton("Вайргард")
+        val protocolRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        wireGuardButton = protocolButton("WireGuard")
         warpButton = protocolButton("WARP")
-        amneziaButton = protocolButton("Амнезия")
+        amneziaButton = protocolButton("AmneziaWG")
         wireGuardButton.setOnClickListener { selectProtocol("WireGuard") }
         warpButton.setOnClickListener { selectProtocol("WARP") }
         amneziaButton.setOnClickListener {
             selectProtocol("AmneziaWG")
-            status.text = "Поддержка AmneziaWG ещё не подключена"
+            status.text = "AmneziaWG пока не поддерживается движком"
         }
-        choices.addView(wireGuardButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { rightMargin = dp(5) })
-        choices.addView(warpButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(5); rightMargin = dp(5) })
-        choices.addView(amneziaButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(5) })
-        root.addView(choices, full().apply { topMargin = dp(10) })
+        protocolRow.addView(wireGuardButton, LinearLayout.LayoutParams(0, dp(44), 1f).apply { rightMargin = dp(4) })
+        protocolRow.addView(warpButton, LinearLayout.LayoutParams(0, dp(44), 1f).apply { leftMargin = dp(4); rightMargin = dp(4) })
+        protocolRow.addView(amneziaButton, LinearLayout.LayoutParams(0, dp(44), 1f).apply { leftMargin = dp(4) })
+        root.addView(protocolRow, full().apply { topMargin = dp(14) })
         updateProtocolButtons()
 
-        val importButton = Button(this).apply {
-            text = "＋   ДОБАВИТЬ КОНФИГУРАЦИЮ"
-            textSize = 13f
+        connectionButton = Button(this).apply {
+            textSize = 14f
             isAllCaps = false
-            setTextColor(neon)
-            background = rounded(panel, 16)
-            setOnClickListener {
-                val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    type = "*/*"
-                }
-                startActivityForResult(pick, REQUEST_CONFIG)
-            }
-        }
-        root.addView(importButton, full().apply { topMargin = dp(14) })
-
-        val generateWarpButton = Button(this).apply {
-            text = "✦   СОЗДАТЬ WARP-ПРОФИЛЬ"
-            textSize = 13f
-            isAllCaps = false
+            typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.BLACK)
-            background = rounded(neon, 16)
-            setOnClickListener { generateWarpProfile() }
+            setOnClickListener { toggleConnection() }
         }
-        root.addView(generateWarpButton, full().apply { topMargin = dp(10) })
+        root.addView(connectionButton, full().apply { topMargin = dp(12) })
 
         root.addView(TextView(this).apply {
-            text = "Ваша конфигурация сохранена на телефоне и загрузится автоматически при следующем запуске bekhruz."
-            textSize = 11f
-            gravity = Gravity.CENTER
-            setTextColor(muted)
-            setLineSpacing(dp(3).toFloat(), 1f)
-        }, full().apply { topMargin = dp(14) })
-
-        val bottomSpacer = View(this)
-        root.addView(bottomSpacer, LinearLayout.LayoutParams(1, 0, 1f))
-        root.addView(TextView(this).apply {
-            text = "ЗАЩИТА  •  ПРИВАТНОСТЬ  •  BEKHRUZ"
+            text = "Bek01 • WireGuard VPN"
             textSize = 10f
-            letterSpacing = .18f
             gravity = Gravity.CENTER
+            letterSpacing = .12f
             setTextColor(muted)
+            setPadding(0, dp(18), 0, 0)
         }, full())
-
         setContentView(root)
+        refreshProfilesUi()
         updateConnectionUi()
+    }
+
+    private var profilesContainer: LinearLayout? = null
+
+    private fun profilesDirectory(): java.io.File =
+        java.io.File(filesDir, "profiles").apply { if (!exists()) mkdirs() }
+
+    private fun profileFiles(): List<java.io.File> =
+        profilesDirectory().listFiles()?.filter { it.isFile && it.extension == "conf" }?.sortedBy { it.name.lowercase() } ?: emptyList()
+
+    private fun selectedProfileFile(): java.io.File? {
+        val name = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString("active_profile_file", null)
+        return if (name.isNullOrBlank()) null else java.io.File(profilesDirectory(), name).takeIf { it.exists() }
+    }
+
+    private fun saveProfile(name: String, raw: String, warp: Boolean = false, reserved: String? = null) {
+        val safe = name.trim().replace(Regex("[^A-Za-z0-9._ -]"), "_").take(48).ifBlank { "WireGuard" }
+        val fileName = safe + "_" + System.currentTimeMillis() + ".conf"
+        java.io.File(profilesDirectory(), fileName).writeText(raw, Charsets.UTF_8)
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+            .putString("active_profile_file", fileName)
+            .putString(KEY_CONFIG_NAME, safe)
+            .putBoolean(KEY_IS_WARP, warp)
+            .putString(KEY_WARP_RESERVED, reserved)
+            .putString(KEY_PROTOCOL, if (warp) "WARP" else "WireGuard")
+            .apply()
+        openFileOutput(CONFIG_FILE, MODE_PRIVATE).use { it.write(raw.toByteArray(Charsets.UTF_8)) }
+        isWarpConfig = warp
+        warpReserved = reserved
+        protocol = if (warp) "WARP" else "WireGuard"
+    }
+
+    private fun activateProfile(file: java.io.File) {
+        if (connected || busy) {
+            Toast.makeText(this, "Сначала отключите текущий туннель", Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val raw = file.readText(Charsets.UTF_8)
+            val parsed = Config.parse(ByteArrayInputStream(raw.toByteArray(Charsets.UTF_8)))
+            val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            val warp = raw.contains("cloudflare", true) || raw.contains("162.159.") || file.name.contains("warp", true)
+            val reserved = prefs.getString(KEY_WARP_RESERVED, null)
+            prefs.edit().putString("active_profile_file", file.name)
+                .putString(KEY_CONFIG_NAME, file.nameWithoutExtension.substringBeforeLast("_"))
+                .putBoolean(KEY_IS_WARP, warp)
+                .putString(KEY_PROTOCOL, if (warp) "WARP" else "WireGuard").apply()
+            openFileOutput(CONFIG_FILE, MODE_PRIVATE).use { it.write(raw.toByteArray(Charsets.UTF_8)) }
+            importedConfig = parsed
+            isWarpConfig = warp
+            protocol = if (warp) "WARP" else "WireGuard"
+            warpReserved = if (warp) reserved else null
+            updateProtocolButtons()
+            refreshProfilesUi()
+            updateConnectionUi()
+            status.text = "Выбран туннель: ${savedConfigName()}"
+        } catch (e: Exception) {
+            Toast.makeText(this, "Ошибка профиля: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun refreshProfilesUi() {
+        val list = profilesContainer ?: return
+        list.removeAllViews()
+        val active = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString("active_profile_file", null)
+        val files = profileFiles()
+        if (files.isEmpty()) {
+            list.addView(TextView(this).apply {
+                text = "Нет туннелей. Нажмите «Добавить туннель» и импортируйте .conf"
+                textSize = 13f
+                setTextColor(muted)
+                setPadding(dp(14), dp(18), dp(14), dp(18))
+                background = rounded(panel, 14)
+            }, full())
+        }
+        files.forEach { file ->
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(14), dp(10), dp(8), dp(10))
+                background = rounded(if (file.name == active) Color.rgb(22, 43, 37) else panel, 14)
+                setOnClickListener { activateProfile(file) }
+            }
+            val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            info.addView(TextView(this).apply {
+                text = file.nameWithoutExtension.substringBeforeLast("_")
+                textSize = 15f
+                setTextColor(Color.WHITE)
+                typeface = Typeface.DEFAULT_BOLD
+            }, full())
+            info.addView(TextView(this).apply {
+                text = if (file.name == active) "Выбранный туннель" else "WireGuard • Нажмите для выбора"
+                textSize = 10f
+                setTextColor(if (file.name == active) neon else muted)
+                setPadding(0, dp(4), 0, 0)
+            }, full())
+            card.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
+            card.addView(TextView(this).apply {
+                text = if (file.name == active && connected) "●" else "○"
+                textSize = 20f
+                setTextColor(if (file.name == active && connected) neon else muted)
+                gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(dp(30), dp(42)))
+            card.addView(TextView(this).apply {
+                text = "✎"
+                textSize = 20f
+                setTextColor(neon)
+                gravity = Gravity.CENTER
+                setOnClickListener { renameProfile(file) }
+            }, LinearLayout.LayoutParams(dp(34), dp(42)))
+            card.addView(TextView(this).apply {
+                text = "⋮"
+                textSize = 22f
+                setTextColor(muted)
+                gravity = Gravity.CENTER
+                setOnClickListener { showProfileMenu(file) }
+            }, LinearLayout.LayoutParams(dp(30), dp(42)))
+            list.addView(card, full().apply { bottomMargin = dp(8) })
+        }
+    }
+
+    private fun renameProfile(file: java.io.File) {
+        val field = android.widget.EditText(this).apply {
+            setText(file.nameWithoutExtension.substringBeforeLast("_"))
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+        }
+        android.app.AlertDialog.Builder(this).setTitle("Переименовать туннель")
+            .setView(field).setNegativeButton("Отмена", null)
+            .setPositiveButton("Сохранить") { _, _ ->
+                val base = field.text.toString().trim().replace(Regex("[^A-Za-z0-9._ -]"), "_").take(48)
+                if (base.isNotBlank()) {
+                    val suffix = file.name.substringAfterLast("_").removeSuffix(".conf")
+                    file.renameTo(java.io.File(profilesDirectory(), "${base}_${suffix}.conf"))
+                    refreshProfilesUi()
+                }
+            }.show()
+    }
+
+    private fun showProfileMenu(file: java.io.File) {
+        val options = arrayOf("Подключить / выбрать", "Переименовать", "Удалить")
+        android.app.AlertDialog.Builder(this).setTitle(file.nameWithoutExtension.substringBeforeLast("_"))
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> { activateProfile(file); if (!connected) toggleConnection() }
+                    1 -> renameProfile(file)
+                    2 -> android.app.AlertDialog.Builder(this).setMessage("Удалить этот туннель?")
+                        .setNegativeButton("Отмена", null).setPositiveButton("Удалить") { _, _ ->
+                            if (file.name == getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString("active_profile_file", null)) {
+                                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().remove("active_profile_file").apply()
+                                importedConfig = null
+                                openFileOutput(CONFIG_FILE, MODE_PRIVATE).use { it.write(ByteArray(0)) }
+                            }
+                            file.delete()
+                            refreshProfilesUi()
+                            updateConnectionUi()
+                        }.show()
+                }
+            }.show()
+    }
+
+    private fun showAddMenu() {
+        android.app.AlertDialog.Builder(this).setTitle("Добавить туннель")
+            .setItems(arrayOf("Импортировать из файла или архива", "Создать профиль Cloudflare WARP")) { _, which ->
+                if (which == 0) {
+                    val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "*/*"
+                    }
+                    startActivityForResult(pick, REQUEST_CONFIG)
+                } else generateWarpProfile()
+            }.show()
+    }
+
+    private fun showAppMenu() {
+        android.app.AlertDialog.Builder(this).setTitle("Bek01")
+            .setItems(arrayOf("Импортировать конфигурацию", "Создать WARP-профиль", "О приложении")) { _, which ->
+                when (which) {
+                    0 -> showAddMenu()
+                    1 -> generateWarpProfile()
+                    2 -> android.app.AlertDialog.Builder(this).setMessage("Bek01 — VPN-клиент на базе WireGuard.").setPositiveButton("OK", null).show()
+                }
+            }.show()
     }
 
     private fun selectProtocol(value: String) {
