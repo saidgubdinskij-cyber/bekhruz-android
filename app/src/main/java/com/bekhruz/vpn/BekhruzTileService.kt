@@ -30,6 +30,14 @@ class BekhruzTileService : TileService() {
     override fun onClick() {
         super.onClick()
         val isConnected = prefs.getBoolean("vpn_connected", false)
+        val selectedProtocol = prefs.getString("selected_protocol", "WireGuard")
+        if (!isConnected && selectedProtocol == "WARP") {
+            val launch = Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            startActivityAndCollapse(launch)
+            return
+        }
         if (!isConnected && VpnService.prepare(this) != null) {
             val launch = Intent(this, MainActivity::class.java).apply {
                 action = MainActivity.ACTION_TILE_CONNECT
