@@ -71,7 +71,16 @@ class MainActivity : Activity() {
         restoreSavedConfiguration()
         connected = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_CONNECTED, false)
         render()
-        if (intent?.action == ACTION_TILE_CONNECT) toggleConnection()
+        when (intent?.action) {
+            ACTION_TILE_CONNECT -> toggleConnection()
+            else -> {
+                // Launching Bekhruz from the Infinix One-Tap button is a connect shortcut.
+                // Do not toggle an already active tunnel off.
+                if (!connected && importedConfig != null) {
+                    connectionButton.post { toggleConnection() }
+                }
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
