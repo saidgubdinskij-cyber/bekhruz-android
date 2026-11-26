@@ -5,6 +5,7 @@ import android.content.Intent
 import android.database.Cursor
 import android.graphics.Color
 import android.graphics.Typeface
+import android.net.VpnService
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -14,20 +15,38 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import com.wireguard.android.backend.GoBackend
+import com.wireguard.android.backend.Tunnel
+import com.wireguard.config.Config
+import java.io.ByteArrayInputStream
 
 class MainActivity : Activity() {
     private val neon = Color.rgb(0, 245, 160)
     private val muted = Color.rgb(155, 165, 175)
     private var protocol = "WireGuard"
     private lateinit var status: TextView
-    // Kept in memory only; never write VPN private keys to logs or plain preferences.
-    private var importedConfig: String? = null
+    private lateinit var engineStatus: TextView
+    private lateinit var connectionButton: Button
+    private var importedConfig: Config? = null
+    private var backend: GoBackend? = null
+    private var connected = false
+    private var busy = false
+
+    private val tunnel = object : Tunnel {
+        override fun getName(): String = "bekhruz"
+        override fun onStateChange(newState: Tunnel.State) {
+            runOnUiThread {
+                connected = newState == Tunnel.State.UP
+                busy = false
+                updateConnectionUi()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Color.rgb(5, 6, 8)
         window.navigationBarColor = Color.rgb(5, 6, 8)
-        window.decorView.systemUiVisibility = 0
         render()
     }
 
@@ -54,8 +73,8 @@ class MainActivity : Activity() {
         }, full())
 
         root.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
-
         root.addView(label("VPN PROTOCOL"), full())
+
         val choices = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val wg = button("WireGuard")
         val awg = button("AmneziaWG")
@@ -65,8 +84,19 @@ class MainActivity : Activity() {
                 b.setBackgroundColor(if (protocol == p) neon else Color.rgb(22, 28, 30))
             }
         }
-        wg.setOnClickListener { protocol = "WireGuard"; updateChoice() }
-        awg.setOnClickListener { protocol = "AmneziaWG"; updateChoice() }
+        wg.setOnClickListener {
+            protocol = "WireGuard"
+            updateChoice()
+            updateConnectionUi()
+        }
+        awg.setOnClickListener {
+            protocol = "AmneziaWG"
+            updateChoice()
+            updateConnectionUi()
+            if (importedConfig != null) {
+                status.text = "AmneziaWG engine is not installed yet"
+            }
+        }
         choices.addView(wg, LinearLayout.LayoutParams(0, dp(48), 1f).apply { rightMargin = dp(6) })
         choices.addView(awg, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(6) })
         root.addView(choices, full())
@@ -78,31 +108,138 @@ class MainActivity : Activity() {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = "*/*"
             }
-            startActivityForResult(pick, 7)
+            startActivityForResult(pick, REQUEST_CONFIG)
         }
         root.addView(import, full().apply { topMargin = dp(24) })
 
         status = label("No configuration selected").apply { gravity = Gravity.CENTER }
         root.addView(status, full().apply { topMargin = dp(12) })
 
-        root.addView(TextView(this).apply {
-            text = "VPN ENGINE NOT CONNECTED"
+        engineStatus = TextView(this).apply {
+            text = "VPN ENGINE READY"
             textSize = 13f
             gravity = Gravity.CENTER
-            setTextColor(Color.rgb(255, 190, 80))
-        }, full().apply { topMargin = dp(28) })
+            setTextColor(neon)
+        }
+        root.addView(engineStatus, full().apply { topMargin = dp(28) })
+
+        connectionButton = button("CONNECT")
+        connectionButton.setOnClickListener { toggleConnection() }
+        root.addView(connectionButton, full().apply { topMargin = dp(20) })
 
         root.addView(TextView(this).apply {
-            text = "Configuration file import and basic WireGuard validation are available. The VPN tunnel engine and Android VPN permission flow still need to be integrated, so importing a file does not connect the VPN yet."
+            text = "Import a valid WireGuard .conf file, then tap CONNECT. Android will ask you to approve the VPN connection. Your configuration stays on this device."
             textSize = 12f
             gravity = Gravity.CENTER
             setTextColor(muted)
             setLineSpacing(dp(3).toFloat(), 1f)
-        }, full().apply { topMargin = dp(12) })
+        }, full().apply { topMargin = dp(16) })
 
         root.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
         root.addView(label("BLACK  •  NEON  •  ANDROID").apply { gravity = Gravity.CENTER }, full())
         setContentView(root)
+        updateConnectionUi()
+    }
+
+    private fun toggleConnection() {
+        if (busy) return
+        if (connected) {
+            disconnectTunnel()
+            return
+        }
+        if (protocol != "WireGuard") {
+            status.text = "AmneziaWG support is not integrated yet"
+            return
+        }
+        if (importedConfig == null) {
+            status.text = "Import a WireGuard configuration first"
+            return
+        }
+
+        val permissionIntent = VpnService.prepare(this)
+        if (permissionIntent != null) {
+            startActivityForResult(permissionIntent, REQUEST_VPN_PERMISSION)
+        } else {
+            connectTunnel()
+        }
+    }
+
+    private fun connectTunnel() {
+        val config = importedConfig ?: return
+        busy = true
+        updateConnectionUi()
+        engineStatus.text = "CONNECTING…"
+
+        Thread {
+            try {
+                val activeBackend = backend ?: GoBackend(applicationContext).also { backend = it }
+                activeBackend.setState(tunnel, Tunnel.State.UP, config)
+                runOnUiThread {
+                    connected = true
+                    busy = false
+                    engineStatus.text = "VPN CONNECTED"
+                    status.text = "WireGuard tunnel is active"
+                    updateConnectionUi()
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    connected = false
+                    busy = false
+                    engineStatus.text = "CONNECTION FAILED"
+                    status.text = e.message?.take(110) ?: "Could not start WireGuard"
+                    updateConnectionUi()
+                }
+            }
+        }.start()
+    }
+
+    private fun disconnectTunnel() {
+        val activeBackend = backend
+        if (activeBackend == null) {
+            connected = false
+            updateConnectionUi()
+            return
+        }
+        busy = true
+        updateConnectionUi()
+        engineStatus.text = "DISCONNECTING…"
+        Thread {
+            try {
+                activeBackend.setState(tunnel, Tunnel.State.DOWN, null)
+                runOnUiThread {
+                    connected = false
+                    busy = false
+                    engineStatus.text = "VPN DISCONNECTED"
+                    status.text = "Tunnel stopped"
+                    updateConnectionUi()
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    busy = false
+                    engineStatus.text = "DISCONNECT FAILED"
+                    status.text = e.message?.take(110) ?: "Could not stop tunnel"
+                    updateConnectionUi()
+                }
+            }
+        }.start()
+    }
+
+    private fun updateConnectionUi() {
+        if (!::connectionButton.isInitialized) return
+        connectionButton.text = when {
+            busy -> "PLEASE WAIT…"
+            connected -> "DISCONNECT"
+            else -> "CONNECT"
+        }
+        connectionButton.isEnabled = !busy && (protocol == "WireGuard" || connected)
+        if (::engineStatus.isInitialized) {
+            engineStatus.text = when {
+                busy -> "VPN WORKING…"
+                connected -> "VPN CONNECTED"
+                else -> "VPN ENGINE READY"
+            }
+            engineStatus.setTextColor(if (connected) neon else Color.rgb(255, 190, 80))
+        }
     }
 
     private fun readDisplayName(uri: Uri): String {
@@ -115,60 +252,57 @@ class MainActivity : Activity() {
         return name
     }
 
-    private fun validateWireGuardConfig(text: String): String? {
-        val hasInterface = Regex("(?im)^\\s*\\[Interface]\\s*$").containsMatchIn(text)
-        val hasPeer = Regex("(?im)^\\s*\\[Peer]\\s*$").containsMatchIn(text)
-        val hasPrivateKey = Regex("(?im)^\\s*PrivateKey\\s*=\\s*\\S+").containsMatchIn(text)
-        val hasAddress = Regex("(?im)^\\s*Address\\s*=\\s*\\S+").containsMatchIn(text)
-        val hasPublicKey = Regex("(?im)^\\s*PublicKey\\s*=\\s*\\S+").containsMatchIn(text)
-
-        return when {
-            !hasInterface -> "Missing [Interface] section"
-            !hasPrivateKey -> "Missing Interface PrivateKey"
-            !hasAddress -> "Missing Interface Address"
-            !hasPeer -> "Missing [Peer] section"
-            !hasPublicKey -> "Missing Peer PublicKey"
-            else -> null
-        }
-    }
-
     private fun label(value: String) = TextView(this).apply {
-        text = value; textSize = 12f; letterSpacing = .08f; setTextColor(muted)
+        text = value
+        textSize = 12f
+        letterSpacing = .08f
+        setTextColor(muted)
     }
+
     private fun button(value: String) = Button(this).apply {
-        text = value; textSize = 12f; isAllCaps = false
-        setTextColor(neon); setBackgroundColor(Color.rgb(22, 28, 30))
+        text = value
+        textSize = 12f
+        isAllCaps = false
+        setTextColor(neon)
+        setBackgroundColor(Color.rgb(22, 28, 30))
     }
+
     private fun full() = LinearLayout.LayoutParams(-1, -2)
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     @Deprecated("Deprecated in Android API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != 7 || resultCode != RESULT_OK) return
+        if (resultCode != RESULT_OK) return
+
+        if (requestCode == REQUEST_VPN_PERMISSION) {
+            connectTunnel()
+            return
+        }
+        if (requestCode != REQUEST_CONFIG) return
         val uri = data?.data ?: return
 
         try {
-            val configText = contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use {
-                it.readText()
-            } ?: throw IllegalStateException("Could not read the selected file")
+            val configText = contentResolver.openInputStream(uri)?.use { input ->
+                input.readBytes().toString(Charsets.UTF_8)
+            } ?: throw IllegalStateException("Could not read selected file")
 
-            val validationError = validateWireGuardConfig(configText)
-            if (validationError != null) {
-                importedConfig = null
-                status.text = "Invalid WireGuard configuration"
-                Toast.makeText(this, validationError, Toast.LENGTH_LONG).show()
-                return
-            }
-
-            importedConfig = configText
-            val fileName = readDisplayName(uri)
-            status.text = "Imported: $fileName"
+            val parsed = Config.parse(ByteArrayInputStream(configText.toByteArray(Charsets.UTF_8)))
+            importedConfig = parsed
+            status.text = "Imported: ${readDisplayName(uri)}"
+            engineStatus.text = "CONFIGURATION VALID"
             Toast.makeText(this, "WireGuard configuration imported", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             importedConfig = null
-            status.text = "Could not import configuration"
-            Toast.makeText(this, "File read failed", Toast.LENGTH_LONG).show()
+            status.text = "Invalid config: ${e.message?.take(90) ?: "check .conf file"}"
+            engineStatus.text = "CONFIGURATION ERROR"
+            Toast.makeText(this, "Could not read this WireGuard config", Toast.LENGTH_LONG).show()
         }
+        updateConnectionUi()
+    }
+
+    companion object {
+        private const val REQUEST_CONFIG = 7
+        private const val REQUEST_VPN_PERMISSION = 8
     }
 }
