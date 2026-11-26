@@ -46,6 +46,8 @@ class MainActivity : Activity() {
         override fun onStateChange(newState: Tunnel.State) {
             runOnUiThread {
                 connected = newState == Tunnel.State.UP
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean(KEY_CONNECTED, connected).apply()
+                BekhruzTileService.refresh(this@MainActivity, connected)
                 busy = false
                 updateConnectionUi()
             }
@@ -59,7 +61,23 @@ class MainActivity : Activity() {
         protocol = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .getString(KEY_PROTOCOL, "WireGuard") ?: "WireGuard"
         restoreSavedConfiguration()
+        connected = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_CONNECTED, false)
         render()
+        if (intent?.action == ACTION_TILE_CONNECT) toggleConnection()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.action == ACTION_TILE_CONNECT) toggleConnection()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::connectionButton.isInitialized) {
+            connected = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_CONNECTED, connected)
+            updateConnectionUi()
+        }
     }
 
     private fun render() {
@@ -247,6 +265,8 @@ class MainActivity : Activity() {
                 activeBackend.setState(tunnel, Tunnel.State.UP, config)
                 runOnUiThread {
                     connected = true
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean(KEY_CONNECTED, true).apply()
+                    BekhruzTileService.refresh(this@MainActivity, true)
                     busy = false
                     status.text = if (protocol == "WARP") {
                         "Туннель WARP запущен. Маршрутизация Reserved может быть недоступна."
@@ -256,6 +276,8 @@ class MainActivity : Activity() {
             } catch (e: Exception) {
                 runOnUiThread {
                     connected = false
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean(KEY_CONNECTED, false).apply()
+                    BekhruzTileService.refresh(this@MainActivity, false)
                     busy = false
                     status.text = e.message?.take(120) ?: "Не удалось запустить VPN"
                     updateConnectionUi()
@@ -277,6 +299,8 @@ class MainActivity : Activity() {
                 activeBackend.setState(tunnel, Tunnel.State.DOWN, null)
                 runOnUiThread {
                     connected = false
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean(KEY_CONNECTED, false).apply()
+                    BekhruzTileService.refresh(this@MainActivity, false)
                     busy = false
                     status.text = "VPN отключён"
                     updateConnectionUi()
@@ -408,6 +432,8 @@ class MainActivity : Activity() {
     }
 
     companion object {
+        const val ACTION_TILE_CONNECT = "com.bekhruz.vpn.ACTION_TILE_CONNECT"
+        private const val KEY_CONNECTED = "vpn_connected"
         private const val REQUEST_CONFIG = 7
         private const val REQUEST_VPN_PERMISSION = 8
         private const val PREFS_NAME = "bekhruz_settings"
