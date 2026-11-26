@@ -190,6 +190,16 @@ class MainActivity : Activity() {
         }
         root.addView(importButton, full().apply { topMargin = dp(14) })
 
+        val generateWarpButton = Button(this).apply {
+            text = "✦   СОЗДАТЬ WARP-ПРОФИЛЬ"
+            textSize = 13f
+            isAllCaps = false
+            setTextColor(Color.BLACK)
+            background = rounded(neon, 16)
+            setOnClickListener { generateWarpProfile() }
+        }
+        root.addView(generateWarpButton, full().apply { topMargin = dp(10) })
+
         root.addView(TextView(this).apply {
             text = "Ваша конфигурация сохранена на телефоне и загрузится автоматически при следующем запуске bekhruz."
             textSize = 11f
@@ -242,6 +252,10 @@ class MainActivity : Activity() {
             disconnectTunnel()
             return
         }
+        if (protocol == "WARP") {
+            status.text = "Профиль создан, но WARP Reserved ещё не поддерживается текущим VPN-движком. Подключение пока отключено."
+            return
+        }
         if (protocol == "AmneziaWG") {
             status.text = "Поддержка AmneziaWG ещё не подключена"
             return
@@ -253,6 +267,100 @@ class MainActivity : Activity() {
         val permissionIntent = VpnService.prepare(this)
         if (permissionIntent != null) startActivityForResult(permissionIntent, REQUEST_VPN_PERMISSION)
         else connectTunnel()
+    }
+
+    private fun generateWarpProfile() {
+        if (busy) return
+        busy = true
+        status.text = "Создаю ключи и регистрирую устройство в Cloudflare…"
+        updateConnectionUi()
+        Thread {
+            try {
+                val keys = KeyPair()
+                val publicKey = keys.publicKey.toBase64()
+                val privateKey = keys.privateKey.toBase64()
+                val tos = Instant.now().toString()
+                val payload = JSONObject()
+                    .put("key", publicKey)
+                    .put("install_id", "")
+                    .put("warp_enabled", true)
+                    .put("tos", tos)
+                    .put("type", "Android")
+                    .put("locale", "ru_RU")
+                val connection = (URL("https://api.cloudflareclient.com/v0a737/reg").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 20000
+                    readTimeout = 20000
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("User-Agent", "okhttp/3.12.1")
+                }
+                val responseText = try {
+                    connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+                    val stream = if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream
+                    stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                } finally {
+                    connection.disconnect()
+                }
+                if (connection.responseCode !in 200..299) throw IllegalStateException("Cloudflare: HTTP ${connection.responseCode}")
+                val response = JSONObject(responseText)
+                val config = response.getJSONObject("config")
+                val iface = config.getJSONObject("interface")
+                val addresses = iface.getJSONObject("addresses")
+                val peer = config.getJSONArray("peers").getJSONObject(0)
+                val endpoint = peer.getJSONObject("endpoint").getString("host")
+                val clientId = config.getString("client_id")
+                val reservedBytes = Base64.getDecoder().decode(clientId)
+                if (reservedBytes.size < 3) throw IllegalStateException("Cloudflare вернул некорректный client_id")
+                val reserved = reservedBytes.take(3).joinToString(", ") { (it.toInt() and 0xff).toString() }
+                val ipv4 = addresses.optString("v4")
+                val ipv6 = addresses.optString("v6")
+                if (ipv4.isBlank() || endpoint.isBlank()) throw IllegalStateException("В ответе Cloudflare нет адреса или сервера")
+                val addressLine = buildList {
+                    add("$ipv4/32")
+                    if (ipv6.isNotBlank() && ipv6 != "null") add("$ipv6/128")
+                }.joinToString(", ")
+                val dns = "1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001"
+                val profile = """[Interface]
+PrivateKey = $privateKey
+Address = $addressLine
+DNS = $dns
+MTU = 1280
+
+[Peer]
+PublicKey = ${peer.getString("public_key")}
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = $endpoint
+PersistentKeepalive = 25
+"""
+                val parsed = Config.parse(ByteArrayInputStream(profile.toByteArray(Charsets.UTF_8)))
+                openFileOutput(CONFIG_FILE, MODE_PRIVATE).use { it.write(profile.toByteArray(Charsets.UTF_8)) }
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                    .putString(KEY_CONFIG_NAME, "Cloudflare WARP")
+                    .putString(KEY_PROTOCOL, "WARP")
+                    .putBoolean(KEY_IS_WARP, true)
+                    .putString(KEY_WARP_RESERVED, reserved)
+                    .putString("warp_client_id", clientId)
+                    .apply()
+                runOnUiThread {
+                    importedConfig = parsed
+                    isWarpConfig = true
+                    warpReserved = reserved
+                    protocol = "WARP"
+                    updateProtocolButtons()
+                    busy = false
+                    status.text = "WARP-профиль создан и сохранён. Reserved: $reserved"
+                    Toast.makeText(this, "Профиль Cloudflare WARP сохранён", Toast.LENGTH_LONG).show()
+                    updateConnectionUi()
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    busy = false
+                    status.text = "Не удалось создать WARP: ${e.message?.take(100) ?: e.javaClass.simpleName}"
+                    updateConnectionUi()
+                }
+            }
+        }.start()
     }
 
     private fun connectTunnel() {
