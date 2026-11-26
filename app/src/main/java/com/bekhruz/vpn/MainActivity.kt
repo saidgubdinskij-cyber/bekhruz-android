@@ -539,7 +539,7 @@ Endpoint = $endpoint
 PersistentKeepalive = 25
 """
                 val parsed = Config.parse(ByteArrayInputStream(profile.toByteArray(Charsets.UTF_8)))
-                openFileOutput(CONFIG_FILE, MODE_PRIVATE).use { it.write(profile.toByteArray(Charsets.UTF_8)) }
+                saveProfile("Cloudflare WARP", profile, true, reserved)
                 getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                     .putString(KEY_CONFIG_NAME, "Cloudflare WARP")
                     .putString(KEY_PROTOCOL, "WARP")
