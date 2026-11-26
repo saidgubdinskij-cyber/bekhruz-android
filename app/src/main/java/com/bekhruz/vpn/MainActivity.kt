@@ -1,0 +1,124 @@
+package com.bekhruz.vpn
+
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
+import android.net.Uri
+import android.os.Bundle
+import android.view.Gravity
+import android.view.View
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
+
+class MainActivity : Activity() {
+    private val neon = Color.rgb(0, 245, 160)
+    private val muted = Color.rgb(155, 165, 175)
+    private var protocol = "WireGuard"
+    private lateinit var status: TextView
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        window.statusBarColor = Color.rgb(5, 6, 8)
+        window.navigationBarColor = Color.rgb(5, 6, 8)
+        window.decorView.systemUiVisibility = 0
+        render()
+    }
+
+    private fun render() {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(24), dp(36), dp(24), dp(24))
+            setBackgroundColor(Color.rgb(5, 6, 8))
+        }
+        root.addView(TextView(this).apply {
+            text = "bekhruz"
+            textSize = 34f
+            gravity = Gravity.CENTER
+            setTextColor(neon)
+            typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
+        }, full())
+        root.addView(TextView(this).apply {
+            text = "PRIVATE CONNECTION"
+            textSize = 11f
+            letterSpacing = .22f
+            gravity = Gravity.CENTER
+            setTextColor(muted)
+        }, full())
+
+        val gap = View(this)
+        root.addView(gap, LinearLayout.LayoutParams(1, 0, 1f))
+
+        root.addView(label("VPN PROTOCOL"), full())
+        val choices = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val wg = button("WireGuard")
+        val awg = button("AmneziaWG")
+        fun updateChoice() {
+            listOf(wg to "WireGuard", awg to "AmneziaWG").forEach { (b, p) ->
+                b.setTextColor(if (protocol == p) Color.BLACK else neon)
+                b.setBackgroundColor(if (protocol == p) neon else Color.rgb(22, 28, 30))
+            }
+        }
+        wg.setOnClickListener { protocol = "WireGuard"; updateChoice() }
+        awg.setOnClickListener { protocol = "AmneziaWG"; updateChoice() }
+        choices.addView(wg, LinearLayout.LayoutParams(0, dp(48), 1f).apply { rightMargin = dp(6) })
+        choices.addView(awg, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(6) })
+        root.addView(choices, full())
+        updateChoice()
+
+        val import = button("IMPORT CONFIGURATION")
+        import.setOnClickListener {
+            val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+            }
+            startActivityForResult(pick, 7)
+        }
+        root.addView(import, full().apply { topMargin = dp(24) })
+
+        status = label("No configuration selected").apply { gravity = Gravity.CENTER }
+        root.addView(status, full().apply { topMargin = dp(12) })
+
+        root.addView(TextView(this).apply {
+            text = "VPN ENGINE NOT CONNECTED"
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(255, 190, 80))
+        }, full().apply { topMargin = dp(28) })
+
+        root.addView(TextView(this).apply {
+            text = "This is an early interface preview. Importing a file does not start a VPN tunnel. WireGuard and AmneziaWG engines, VPN permission handling and secure config parsing still need to be integrated."
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(muted)
+            setLineSpacing(dp(3).toFloat(), 1f)
+        }, full().apply { topMargin = dp(12) })
+
+        root.addView(gap, LinearLayout.LayoutParams(1, 0, 1f))
+        root.addView(label("BLACK  •  NEON  •  ANDROID").apply { gravity = Gravity.CENTER }, full())
+        setContentView(root)
+    }
+
+    private fun label(value: String) = TextView(this).apply {
+        text = value; textSize = 12f; letterSpacing = .08f; setTextColor(muted)
+    }
+    private fun button(value: String) = Button(this).apply {
+        text = value; textSize = 12f; isAllCaps = false
+        setTextColor(neon); setBackgroundColor(Color.rgb(22, 28, 30))
+    }
+    private fun full() = LinearLayout.LayoutParams(-1, -2)
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    @Deprecated("Deprecated in Android API")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 7 && resultCode == RESULT_OK) {
+            val uri: Uri = data?.data ?: return
+            status.text = "Selected: " + (uri.lastPathSegment ?: "configuration")
+            Toast.makeText(this, "File selected for $protocol", Toast.LENGTH_SHORT).show()
+        }
+    }
+}
