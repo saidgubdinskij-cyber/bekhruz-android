@@ -369,12 +369,13 @@ class MainActivity : Activity() {
 
         try {
             val raw = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                ?.removePrefix("\uFEFF")?.replace("\r\n", "\n")?.replace("\r", "\n")
                 ?: throw IllegalStateException("Не удалось прочитать выбранный файл")
             val reservedMatch = Regex("(?im)^\\s*#?\\s*Reserved\\s*=\\s*([0-9\\s,]+)").find(raw)
             val reserved = reservedMatch?.groupValues?.get(1)?.trim()
             val normalized = raw.lines().filterNot {
                 it.trim().matches(Regex("(?i)^#?\\s*Reserved\\s*=.*$"))
-            }.joinToString("\n")
+            }.joinToString("\n").trim() + "\n"
             val detectedWarp = raw.contains("cloudflare", ignoreCase = true) ||
                 raw.contains("162.159.") || raw.contains("2606:4700:") || reservedMatch != null
             val parsed = Config.parse(ByteArrayInputStream(normalized.toByteArray(Charsets.UTF_8)))
@@ -398,9 +399,10 @@ class MainActivity : Activity() {
                 status.text = "Профиль WARP сохранён. Reserved: $reserved"
             }
         } catch (e: Exception) {
-            importedConfig = null
-            status.text = "Ошибка конфигурации: ${e.message?.take(100) ?: "проверьте файл .conf"}"
-            Toast.makeText(this, "Не удалось добавить конфигурацию VPN", Toast.LENGTH_LONG).show()
+            val detail = e.message?.take(140)?.ifBlank { null }
+                ?: e.javaClass.simpleName
+            status.text = "Не удалось прочитать конфигурацию: $detail"
+            Toast.makeText(this, "Файл не добавлен. Проверьте формат WireGuard .conf", Toast.LENGTH_LONG).show()
         }
         updateConnectionUi()
     }
