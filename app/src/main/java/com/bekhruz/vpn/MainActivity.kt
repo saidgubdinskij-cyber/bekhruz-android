@@ -47,6 +47,9 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Color.rgb(5, 6, 8)
         window.navigationBarColor = Color.rgb(5, 6, 8)
+        protocol = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .getString(KEY_PROTOCOL, "WireGuard") ?: "WireGuard"
+        restoreSavedConfiguration()
         render()
     }
 
@@ -86,11 +89,13 @@ class MainActivity : Activity() {
         }
         wg.setOnClickListener {
             protocol = "WireGuard"
+            saveProtocol()
             updateChoice()
             updateConnectionUi()
         }
         awg.setOnClickListener {
             protocol = "AmneziaWG"
+            saveProtocol()
             updateChoice()
             updateConnectionUi()
             if (importedConfig != null) {
@@ -112,7 +117,9 @@ class MainActivity : Activity() {
         }
         root.addView(import, full().apply { topMargin = dp(24) })
 
-        status = label("No configuration selected").apply { gravity = Gravity.CENTER }
+        status = label(
+            if (importedConfig != null) "Saved: ${savedConfigName()}" else "No configuration selected"
+        ).apply { gravity = Gravity.CENTER }
         root.addView(status, full().apply { topMargin = dp(12) })
 
         engineStatus = TextView(this).apply {
@@ -242,6 +249,29 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun restoreSavedConfiguration() {
+        try {
+            val file = getFileStreamPath(CONFIG_FILE)
+            if (!file.exists()) return
+            val configText = openFileInput(CONFIG_FILE).bufferedReader(Charsets.UTF_8).use { it.readText() }
+            importedConfig = Config.parse(
+                ByteArrayInputStream(configText.toByteArray(Charsets.UTF_8))
+            )
+        } catch (_: Exception) {
+            importedConfig = null
+        }
+    }
+
+    private fun saveProtocol() {
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+            .putString(KEY_PROTOCOL, protocol)
+            .apply()
+    }
+
+    private fun savedConfigName(): String =
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .getString(KEY_CONFIG_NAME, "WireGuard configuration") ?: "WireGuard configuration"
+
     private fun readDisplayName(uri: Uri): String {
         var name = "WireGuard configuration"
         val cursor: Cursor? = contentResolver.query(uri, null, null, null, null)
@@ -288,10 +318,17 @@ class MainActivity : Activity() {
             } ?: throw IllegalStateException("Could not read selected file")
 
             val parsed = Config.parse(ByteArrayInputStream(configText.toByteArray(Charsets.UTF_8)))
+            val displayName = readDisplayName(uri)
+            // Keep the configuration in app-private storage so it survives app restarts and reboots.
+            openFileOutput(CONFIG_FILE, MODE_PRIVATE).use { it.write(configText.toByteArray(Charsets.UTF_8)) }
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putString(KEY_CONFIG_NAME, displayName)
+                .putString(KEY_PROTOCOL, protocol)
+                .apply()
             importedConfig = parsed
-            status.text = "Imported: ${readDisplayName(uri)}"
-            engineStatus.text = "CONFIGURATION VALID"
-            Toast.makeText(this, "WireGuard configuration imported", Toast.LENGTH_SHORT).show()
+            status.text = "Saved: $displayName"
+            engineStatus.text = "CONFIGURATION SAVED"
+            Toast.makeText(this, "Configuration saved on this device", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             importedConfig = null
             status.text = "Invalid config: ${e.message?.take(90) ?: "check .conf file"}"
@@ -304,5 +341,9 @@ class MainActivity : Activity() {
     companion object {
         private const val REQUEST_CONFIG = 7
         private const val REQUEST_VPN_PERMISSION = 8
+        private const val PREFS_NAME = "bekhruz_settings"
+        private const val KEY_PROTOCOL = "selected_protocol"
+        private const val KEY_CONFIG_NAME = "saved_config_name"
+        private const val CONFIG_FILE = "saved_wireguard.conf"
     }
 }
