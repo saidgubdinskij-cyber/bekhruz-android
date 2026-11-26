@@ -48,7 +48,9 @@ class MainActivity : Activity() {
     private var warpReserved: String? = null
 
     private val tunnel = object : Tunnel {
-        override fun getName(): String = "bekhruz"
+        override fun getName(): String {
+            return if (isWarpConfig && !warpReserved.isNullOrBlank()) "bekhruz@reserved=$warpReserved" else "bekhruz"
+        }
         override fun onStateChange(newState: Tunnel.State) {
             runOnUiThread {
                 connected = newState == Tunnel.State.UP
@@ -258,8 +260,8 @@ class MainActivity : Activity() {
             disconnectTunnel()
             return
         }
-        if (protocol == "WARP") {
-            status.text = "Профиль создан, но WARP Reserved ещё не поддерживается текущим VPN-движком. Подключение пока отключено."
+        if (protocol == "WARP" && (!isWarpConfig || warpReserved.isNullOrBlank())) {
+            status.text = "Для WARP нужен профиль с тремя Reserved-байтами. Создайте новый профиль или импортируйте WARP-конфигурацию."
             return
         }
         if (protocol == "AmneziaWG") {
@@ -386,7 +388,7 @@ PersistentKeepalive = 25
                     BekhruzTileService.refresh(this@MainActivity, true)
                     busy = false
                     status.text = if (protocol == "WARP") {
-                        "Туннель WARP запущен. Маршрутизация Reserved может быть недоступна."
+                        "WARP-туннель запущен с Reserved=${warpReserved}. Проверяем связь…"
                     } else "Туннель WireGuard работает"
                     updateConnectionUi()
                 }
