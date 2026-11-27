@@ -213,18 +213,6 @@ class MainActivity : Activity() {
         stateCard.addView(speedStatus, full())
         root.addView(stateCard, full().apply { topMargin = dp(18) })
 
-        val protocolRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        wireGuardButton = protocolButton("WireGuard")
-        warpButton = protocolButton("WARP")
-        amneziaButton = protocolButton("AmneziaWG")
-        wireGuardButton.setOnClickListener { selectProtocol("WireGuard") }
-        warpButton.setOnClickListener { selectProtocol("WARP") }
-        amneziaButton.setOnClickListener { selectProtocol("AmneziaWG") }
-        protocolRow.addView(wireGuardButton, LinearLayout.LayoutParams(0, dp(44), 1f).apply { rightMargin = dp(4) })
-        protocolRow.addView(warpButton, LinearLayout.LayoutParams(0, dp(44), 1f).apply { leftMargin = dp(4); rightMargin = dp(4) })
-        protocolRow.addView(amneziaButton, LinearLayout.LayoutParams(0, dp(44), 1f).apply { leftMargin = dp(4) })
-        root.addView(protocolRow, full().apply { topMargin = dp(14) })
-        updateProtocolButtons()
 
         connectionButton = Button(this).apply {
             textSize = 14f
@@ -441,25 +429,19 @@ class MainActivity : Activity() {
     }
 
     private fun showAddMenu() {
-        android.app.AlertDialog.Builder(this).setTitle("Добавить туннель")
-            .setItems(arrayOf("Импортировать файл WireGuard .conf", "Создать профиль Cloudflare WARP")) { _, which ->
-                if (which == 0) {
-                    val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                        addCategory(Intent.CATEGORY_OPENABLE)
-                        type = "*/*"
-                    }
-                    startActivityForResult(pick, REQUEST_CONFIG)
-                } else generateWarpProfile()
-            }.show()
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        startActivityForResult(pick, REQUEST_CONFIG)
     }
 
     private fun showAppMenu() {
         android.app.AlertDialog.Builder(this).setTitle("Bek01")
-            .setItems(arrayOf("Импортировать конфигурацию", "Создать WARP-профиль", "О приложении")) { _, which ->
+            .setItems(arrayOf("Импортировать конфигурацию", "О приложении")) { _, which ->
                 when (which) {
                     0 -> showAddMenu()
-                    1 -> generateWarpProfile()
-                    2 -> android.app.AlertDialog.Builder(this).setMessage("Bek01 — VPN-клиент на базе WireGuard.").setPositiveButton("OK", null).show()
+                    1 -> android.app.AlertDialog.Builder(this).setMessage("Bek01 — VPN-клиент на базе WireGuard.").setPositiveButton("OK", null).show()
                 }
             }.show()
     }
