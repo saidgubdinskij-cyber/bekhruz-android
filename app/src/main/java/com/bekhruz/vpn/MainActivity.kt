@@ -462,8 +462,11 @@ class MainActivity : Activity() {
         val reserved = if (reservedFile.exists()) reservedFile.readText(Charsets.UTF_8).trim() else ""
         if (reserved.isBlank() || Regex("(?im)^\\s*#?\\s*Reserved\\s*=").containsMatchIn(raw)) return raw
         val peerHeader = Regex("(?im)^\\s*\\[Peer\\]\\s*$")
-        return if (peerHeader.containsMatchIn(raw)) {
-            peerHeader.replaceFirst(raw) { it.value + "\nReserved = " + reserved }
+        val peerMatch = peerHeader.find(raw)
+        return if (peerMatch != null) {
+            raw.substring(0, peerMatch.range.last + 1) +
+                "\nReserved = " + reserved +
+                raw.substring(peerMatch.range.last + 1)
         } else raw
     }
 
