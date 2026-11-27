@@ -25,7 +25,7 @@ class BekhruzTileService : TileService() {
     private fun updateTileState() {
         qsTile?.let { tile ->
             val isConnected = prefs.getBoolean("vpn_connected", false)
-            tile.label = "bekhruz"
+            tile.label = "ZENIX"
             tile.state = if (isConnected) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
             tile.updateTile()
         }
