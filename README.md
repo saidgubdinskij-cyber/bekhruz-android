@@ -1,23 +1,19 @@
-# bekhruz
+# VOLTIX
 
-Black-and-neon Android app interface starter.
+Android VPN application project.
 
-## Included
-- Android project structure
-- Black interface with neon-green accent
-- WireGuard / AmneziaWG protocol selector UI
-- Configuration file picker
-- GitHub Actions workflow to build a debug APK
+## Current features in the project
+- Dark interface with neon-green accents and Russian labels.
+- WireGuard / AmneziaWG configuration import and saved local profiles.
+- QR scan to import a configuration and QR export/share for saved profiles.
+- Android Quick Settings tile for VPN on/off.
+- Connection status and traffic-speed display.
+- Cloudflare WARP profile registration and generation attempt.
 
-## Important
-This is an interface starter only. It does not establish a VPN connection yet. Real WireGuard and AmneziaWG tunnel engines, Android VPN permission handling, secure configuration parsing, and device testing are still required before a VPN connection can work.
+## Important limitations
+- The Cloudflare WARP configuration contains Cloudflare's Reserved routing bytes. A normal WireGuard transport may not route those bytes as Cloudflare expects, so WARP connectivity must be tested on a real device and may require a WARP-compatible transport.
+- VPN behavior, especially the Quick Settings tile and disconnect traffic handling, must be tested on the target Android device. A successful APK build alone does not prove that the VPN connects or blocks traffic correctly.
+- The application ID remains `com.bekhruz.vpn` to preserve compatibility with existing installs and saved app data; the displayed app name is VOLTIX.
 
 ## Build
-Open the Actions tab and run **Build bekhruz APK**. When the workflow succeeds, download the **bekhruz-debug-apk** artifact.
-
-
-## Cloudflare WARP profile generation
-
-The app can register a device with Cloudflare's consumer WARP registration API and save a WireGuard-format profile locally. The registration routing ID (the three reserved bytes) is stored with the profile.
-
-**Important:** the current embedded WireGuard GoBackend does not inject/strip Cloudflare's reserved routing bytes in UDP packets. Therefore generated WARP profiles are saved but WARP connection is deliberately blocked until a WARP-compatible packet transport is integrated. Ordinary WireGuard profiles continue to use the standard backend.
+Open GitHub Actions and run **Build VOLTIX APK**. Download the **voltix-debug-apk** artifact after the workflow completes successfully.
