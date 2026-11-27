@@ -249,10 +249,12 @@ class MainActivity : Activity() {
         return if (name.isNullOrBlank()) null else java.io.File(profilesDirectory(), name).takeIf { it.exists() }
     }
 
-    private fun saveProfile(name: String, raw: String, warp: Boolean = false, reserved: String? = null) {
+    private fun saveProfile(name: String, raw: String, warp: Boolean = false, reserved: String? = null): String {
         val safe = name.trim().replace(Regex("[^A-Za-z0-9._ -]"), "_").take(48).ifBlank { "WireGuard" }
         val fileName = safe + "_" + System.currentTimeMillis() + ".conf"
         java.io.File(profilesDirectory(), fileName).writeText(raw, Charsets.UTF_8)
+        val reservedFile = java.io.File(profilesDirectory(), "$fileName.reserved")
+        if (!reserved.isNullOrBlank()) reservedFile.writeText(reserved, Charsets.UTF_8) else reservedFile.delete()
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
             .putString("active_profile_file", fileName)
             .putString(KEY_CONFIG_NAME, safe)
@@ -264,6 +266,7 @@ class MainActivity : Activity() {
         isWarpConfig = warp
         warpReserved = reserved
         protocol = if (warp) "WARP" else "WireGuard"
+        return fileName
     }
 
     private fun activateProfile(file: java.io.File) {
@@ -277,7 +280,10 @@ class MainActivity : Activity() {
             val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             val warp = raw.contains("cloudflare", true) || raw.contains("162.159.") || file.name.contains("warp", true)
             val amnezia = Regex("(?im)^\\s*(S[1-4]|Jc|Jmin|Jmax|H[1-4]|I[1-5])\\s*=").containsMatchIn(raw)
-            val reserved = prefs.getString(KEY_WARP_RESERVED, null)
+            val sidecar = java.io.File(profilesDirectory(), file.name + ".reserved")
+            val reserved = if (sidecar.exists()) sidecar.readText(Charsets.UTF_8).trim().takeIf { it.isNotBlank() }
+                else if (file.name == prefs.getString("active_profile_file", null)) prefs.getString(KEY_WARP_RESERVED, null)
+                else null
             prefs.edit().putString("active_profile_file", file.name)
                 .putString(KEY_CONFIG_NAME, file.nameWithoutExtension.substringBeforeLast("_"))
                 .putBoolean(KEY_IS_WARP, warp)
@@ -476,10 +482,8 @@ class MainActivity : Activity() {
             disconnectTunnel()
             return
         }
-        if (protocol == "WARP" && (!isWarpConfig || warpReserved.isNullOrBlank())) {
-            // Обычные WireGuard-файлы WARP часто не содержат Reserved.
-            // Получаем корректный профиль у Cloudflare автоматически.
-            generateWarpProfile()
+        if (isWarpConfig && warpReserved.isNullOrBlank()) {
+            status.text = "В этом WARP-файле нет Reserved. Импортируйте полный WARP-конфиг с тремя Reserved-байтами."
             return
         }
         if (importedConfig == null) {
@@ -752,7 +756,7 @@ PersistentKeepalive = 25
             val detectedAmnezia = Regex("(?im)^\\s*(S[1-4]|Jc|Jmin|Jmax|H[1-4]|I[1-5])\\s*=").containsMatchIn(raw)
             val parsed = Config.parse(ByteArrayInputStream(normalized.toByteArray(Charsets.UTF_8)))
             val displayName = readDisplayName(uri)
-            saveProfile(displayName.substringBeforeLast('.'), normalized, detectedWarp, reserved)
+            val savedFileName = saveProfile(displayName.substringBeforeLast('.'), normalized, detectedWarp, reserved)
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putString(KEY_CONFIG_NAME, displayName)
                 .putString(KEY_PROTOCOL, when { detectedWarp -> "WARP"; detectedAmnezia -> "AmneziaWG"; else -> "WireGuard" })
