@@ -147,10 +147,10 @@ class MainActivity : Activity() {
         }
         header.addView(ImageView(this).apply {
             setImageResource(R.drawable.bekhruz_emblem)
-            contentDescription = "Bek01"
+            contentDescription = "ZENIX"
         }, LinearLayout.LayoutParams(dp(42), dp(42)))
         header.addView(TextView(this).apply {
-            text = "Bek01"
+            text = "ZENIX"
             textSize = 27f
             setTextColor(Color.WHITE)
             typeface = Typeface.create("sans-serif", Typeface.BOLD)
@@ -224,7 +224,7 @@ class MainActivity : Activity() {
         root.addView(connectionButton, full().apply { topMargin = dp(12) })
 
         root.addView(TextView(this).apply {
-            text = "Bek01 • WireGuard VPN"
+            text = "ZENIX"
             textSize = 10f
             gravity = Gravity.CENTER
             letterSpacing = .12f
@@ -437,11 +437,11 @@ class MainActivity : Activity() {
     }
 
     private fun showAppMenu() {
-        android.app.AlertDialog.Builder(this).setTitle("Bek01")
+        android.app.AlertDialog.Builder(this).setTitle("ZENIX")
             .setItems(arrayOf("Импортировать конфигурацию", "О приложении")) { _, which ->
                 when (which) {
                     0 -> showAddMenu()
-                    1 -> android.app.AlertDialog.Builder(this).setMessage("Bek01 — VPN-клиент на базе WireGuard.").setPositiveButton("OK", null).show()
+                    1 -> android.app.AlertDialog.Builder(this).setMessage("ZENIX — VPN-клиент на базе WireGuard.").setPositiveButton("OK", null).show()
                 }
             }.show()
     }
