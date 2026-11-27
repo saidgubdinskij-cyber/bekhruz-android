@@ -22,6 +22,7 @@ import android.widget.TextView
 import android.widget.Toast
 import org.amnezia.awg.backend.GoBackend
 import org.amnezia.awg.backend.Tunnel
+import org.amnezia.awg.backend.TunnelActionHandler
 import org.amnezia.awg.config.Config
 import org.amnezia.awg.crypto.KeyPair
 import org.json.JSONObject
@@ -59,6 +60,8 @@ class MainActivity : Activity() {
         override fun getName(): String {
             return if (isWarpConfig && !warpReserved.isNullOrBlank()) "bekhruz@reserved=$warpReserved" else "bekhruz"
         }
+        override fun isIpv4ResolutionPreferred(): Boolean = true
+        override fun isMetered(): Boolean = false
         override fun onStateChange(newState: Tunnel.State) {
             runOnUiThread {
                 connected = newState == Tunnel.State.UP
@@ -608,7 +611,7 @@ PersistentKeepalive = 25
         updateConnectionUi()
         Thread {
             try {
-                val activeBackend = backend ?: GoBackend(applicationContext).also { backend = it }
+                val activeBackend = backend ?: GoBackend(applicationContext, NoOpTunnelActionHandler()).also { backend = it }
                 activeBackend.setState(tunnel, Tunnel.State.UP, config)
                 runOnUiThread {
                     connected = true
@@ -783,6 +786,13 @@ PersistentKeepalive = 25
             Toast.makeText(this, "Файл не добавлен. Проверьте формат WireGuard .conf", Toast.LENGTH_LONG).show()
         }
         updateConnectionUi()
+    }
+
+    private class NoOpTunnelActionHandler : TunnelActionHandler {
+        override fun runPreUp(scripts: MutableCollection<String>) {}
+        override fun runPostUp(scripts: MutableCollection<String>) {}
+        override fun runPreDown(scripts: MutableCollection<String>) {}
+        override fun runPostDown(scripts: MutableCollection<String>) {}
     }
 
     companion object {
