@@ -477,7 +477,9 @@ class MainActivity : Activity() {
             return
         }
         if (protocol == "WARP" && (!isWarpConfig || warpReserved.isNullOrBlank())) {
-            status.text = "Для WARP нужен профиль с тремя Reserved-байтами. Создайте новый профиль или импортируйте WARP-конфигурацию."
+            // Обычные WireGuard-файлы WARP часто не содержат Reserved.
+            // Получаем корректный профиль у Cloudflare автоматически.
+            generateWarpProfile()
             return
         }
         if (importedConfig == null) {
@@ -576,6 +578,14 @@ PersistentKeepalive = 25
                     refreshProfilesUi()
                     Toast.makeText(this, "Профиль Cloudflare WARP сохранён", Toast.LENGTH_LONG).show()
                     updateConnectionUi()
+                    // Продолжаем действие пользователя: после регистрации сразу запрашиваем
+                    // разрешение Android и запускаем созданный WARP-туннель.
+                    val permissionIntent = VpnService.prepare(this)
+                    if (permissionIntent != null) {
+                        startActivityForResult(permissionIntent, REQUEST_VPN_PERMISSION)
+                    } else {
+                        connectTunnel()
+                    }
                 }
             } catch (e: Exception) {
                 runOnUiThread {
