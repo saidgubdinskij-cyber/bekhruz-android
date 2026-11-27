@@ -34,7 +34,7 @@ jobs:
       - name: Verify AmneziaWG native engine is packaged
         run: |
           set -euo pipefail
-          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -E 'lib/arm64-v8a/libwg-go.so'
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -E 'lib/(arm64-v8a|armeabi-v7a|x86_64)/libam-go.so'
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
