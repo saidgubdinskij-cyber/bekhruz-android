@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.database.Cursor
 import android.graphics.Color
+import android.graphics.Bitmap
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.VpnService
@@ -20,6 +21,10 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.FileProvider
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.MultiFormatWriter
+import com.google.zxing.integration.android.IntentIntegrator
 import org.amnezia.awg.backend.GoBackend
 import org.amnezia.awg.backend.Tunnel
 import org.amnezia.awg.backend.TunnelActionHandler
@@ -82,13 +87,19 @@ class MainActivity : Activity() {
         restoreSavedConfiguration()
         connected = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_CONNECTED, false)
         render()
-        if (intent?.action == ACTION_TILE_CONNECT) toggleConnection()
+        handleTileAction(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.action == ACTION_TILE_CONNECT) toggleConnection()
+        handleTileAction(intent)
+    }
+
+    private fun handleTileAction(source: Intent?) {
+        if (source?.action != ACTION_TILE_CONNECT) return
+        source.action = null
+        toggleConnection()
     }
 
     override fun onResume() {
@@ -413,13 +424,14 @@ class MainActivity : Activity() {
     }
 
     private fun showProfileMenu(file: java.io.File) {
-        val options = arrayOf("Подключить / выбрать", "Переименовать", "Удалить")
+        val options = arrayOf("Подключить / выбрать", "Показать QR-код", "Переименовать", "Удалить")
         android.app.AlertDialog.Builder(this).setTitle(file.nameWithoutExtension.substringBeforeLast("_"))
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> { activateProfile(file); if (!connected) toggleConnection() }
-                    1 -> renameProfile(file)
-                    2 -> android.app.AlertDialog.Builder(this).setMessage("Удалить этот туннель?")
+                    1 -> showQrForProfile(file)
+                    2 -> renameProfile(file)
+                    3 -> android.app.AlertDialog.Builder(this).setMessage("Удалить этот туннель?")
                         .setNegativeButton("Отмена", null).setPositiveButton("Удалить") { _, _ ->
                             if (file.name == getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString("active_profile_file", null)) {
                                 getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().remove("active_profile_file").apply()
@@ -434,6 +446,131 @@ class MainActivity : Activity() {
             }.show()
     }
 
+
+    private fun startQrScan() {
+        IntentIntegrator(this)
+            .setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
+            .setPrompt("Наведите камеру на QR-код VPN-конфигурации")
+            .setBeepEnabled(false)
+            .setOrientationLocked(false)
+            .initiateScan()
+    }
+
+    private fun profileTextForQr(file: java.io.File): String {
+        val raw = file.readText(Charsets.UTF_8).trim()
+        val reservedFile = java.io.File(profilesDirectory(), file.name + ".reserved")
+        val reserved = if (reservedFile.exists()) reservedFile.readText(Charsets.UTF_8).trim() else ""
+        if (reserved.isBlank() || Regex("(?im)^\\s*#?\\s*Reserved\\s*=").containsMatchIn(raw)) return raw
+        val peerHeader = Regex("(?im)^\\s*\\[Peer\\]\\s*$")
+        return if (peerHeader.containsMatchIn(raw)) {
+            peerHeader.replaceFirst(raw) { it.value + "\nReserved = " + reserved }
+        } else raw
+    }
+
+    private fun qrBitmap(contents: String): Bitmap {
+        val size = 900
+        val matrix = MultiFormatWriter().encode(contents, BarcodeFormat.QR_CODE, size, size)
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        for (x in 0 until size) for (y in 0 until size) {
+            bitmap.setPixel(x, y, if (matrix[x, y]) Color.BLACK else Color.WHITE)
+        }
+        return bitmap
+    }
+
+    private fun showQrForProfile(file: java.io.File) {
+        try {
+            val bitmap = qrBitmap(profileTextForQr(file))
+            val image = ImageView(this).apply {
+                setImageBitmap(bitmap)
+                adjustViewBounds = true
+                setPadding(dp(12), dp(12), dp(12), dp(12))
+            }
+            val holder = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(8), dp(8), dp(8), dp(8))
+                addView(image, LinearLayout.LayoutParams(-1, dp(320)))
+                addView(TextView(this@MainActivity).apply {
+                    text = "QR содержит VPN-конфигурацию и приватный ключ. Передавайте его только доверенным людям."
+                    textSize = 12f
+                    setTextColor(muted)
+                    setPadding(dp(8), dp(8), dp(8), dp(8))
+                }, full())
+            }
+            android.app.AlertDialog.Builder(this)
+                .setTitle("QR-код: " + file.nameWithoutExtension.substringBeforeLast("_"))
+                .setView(holder)
+                .setNegativeButton("Закрыть", null)
+                .setPositiveButton("Поделиться") { _, _ -> shareQrImage(bitmap) }
+                .show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Не удалось создать QR: " + (e.message?.take(100) ?: "ошибка"), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun shareQrImage(bitmap: Bitmap) {
+        try {
+            val dir = java.io.File(cacheDir, "qr").apply { mkdirs() }
+            val file = java.io.File(dir, "zenix-profile-" + System.currentTimeMillis() + ".png")
+            file.outputStream().use { out ->
+                if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) {
+                    throw IllegalStateException("Не удалось сохранить QR")
+                }
+            }
+            val uri = FileProvider.getUriForFile(this, packageName + ".fileprovider", file)
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "image/png"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(send, "Поделиться QR-кодом ZENIX"))
+        } catch (e: Exception) {
+            Toast.makeText(this, "Не удалось поделиться QR: " + (e.message?.take(100) ?: "ошибка"), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun importConfigText(rawInput: String, displayName: String) {
+        try {
+            val raw = rawInput.removePrefix("\uFEFF").replace("\r\n", "\n").replace("\r", "\n")
+            val reservedMatch = Regex("(?im)^\\s*#?\\s*Reserved\\s*=\\s*([0-9\\s,]+)").find(raw)
+            val reserved = reservedMatch?.groupValues?.get(1)?.trim()
+            val normalized = raw.lines().filterNot {
+                it.trim().matches(Regex("(?i)^#?\\s*Reserved\\s*=.*$"))
+            }.joinToString("\n").trim() + "\n"
+            val detectedWarp = raw.contains("cloudflare", ignoreCase = true) ||
+                raw.contains("162.159.") || raw.contains("2606:4700:") || reservedMatch != null
+            val detectedAmnezia = Regex("(?im)^\\s*(S[1-4]|Jc|Jmin|Jmax|H[1-4]|I[1-5])\\s*=").containsMatchIn(raw)
+            val parsed = Config.parse(ByteArrayInputStream(normalized.toByteArray(Charsets.UTF_8)))
+            saveProfile(displayName.substringBeforeLast('.'), normalized, detectedWarp, reserved)
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putString(KEY_CONFIG_NAME, displayName)
+                .putString(KEY_PROTOCOL, when { detectedWarp -> "WARP"; detectedAmnezia -> "AmneziaWG"; else -> "WireGuard" })
+                .putBoolean(KEY_IS_WARP, detectedWarp)
+                .putString(KEY_WARP_RESERVED, reserved)
+                .apply()
+            importedConfig = parsed
+            refreshProfilesUi()
+            isWarpConfig = detectedWarp
+            warpReserved = reserved
+            protocol = when { detectedWarp -> "WARP"; detectedAmnezia -> "AmneziaWG"; else -> "WireGuard" }
+            updateProtocolButtons()
+            status.text = when {
+                detectedWarp -> "Профиль WARP сохранён: " + displayName
+                detectedAmnezia -> "Профиль AmneziaWG сохранён: " + displayName
+                else -> "Сохранено: " + displayName
+            }
+            Toast.makeText(this, "Конфигурация сохранена на устройстве", Toast.LENGTH_SHORT).show()
+            if (detectedWarp && !reserved.isNullOrBlank()) {
+                engineStatus.text = "ПРОФИЛЬ WARP • RESERVED НАЙДЕН"
+                status.text = "Профиль WARP сохранён. Reserved: " + reserved
+            }
+        } catch (e: Exception) {
+            val detail = e.message?.take(140)?.ifBlank { null } ?: e.javaClass.simpleName
+            status.text = "Не удалось импортировать конфигурацию: " + detail
+            Toast.makeText(this, "QR или файл не содержит корректную VPN-конфигурацию", Toast.LENGTH_LONG).show()
+        }
+        updateConnectionUi()
+    }
+
     private fun showAddMenu() {
         val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -444,10 +581,16 @@ class MainActivity : Activity() {
 
     private fun showAppMenu() {
         android.app.AlertDialog.Builder(this).setTitle("ZENIX")
-            .setItems(arrayOf("Импортировать конфигурацию", "О приложении")) { _, which ->
+            .setItems(arrayOf("Импортировать конфигурацию", "Сканировать QR-код", "QR выбранного профиля", "О приложении")) { _, which ->
                 when (which) {
                     0 -> showAddMenu()
-                    1 -> android.app.AlertDialog.Builder(this).setMessage("ZENIX — VPN-клиент на базе WireGuard.").setPositiveButton("OK", null).show()
+                    1 -> startQrScan()
+                    2 -> {
+                        val activeFile = selectedProfileFile()
+                        if (activeFile != null) showQrForProfile(activeFile)
+                        else Toast.makeText(this, "Сначала выберите VPN-профиль", Toast.LENGTH_SHORT).show()
+                    }
+                    3 -> android.app.AlertDialog.Builder(this).setMessage("ZENIX — VPN-клиент на базе WireGuard.").setPositiveButton("OK", null).show()
                 }
             }.show()
     }
@@ -733,6 +876,12 @@ PersistentKeepalive = 25
     @Deprecated("Deprecated in Android API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        val scan = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
+        if (scan != null) {
+            if (!scan.contents.isNullOrBlank()) importConfigText(scan.contents, "QR-профиль")
+            else Toast.makeText(this, "Сканирование отменено", Toast.LENGTH_SHORT).show()
+            return
+        }
         if (resultCode != RESULT_OK) return
         if (requestCode == REQUEST_VPN_PERMISSION) {
             connectTunnel()
@@ -740,44 +889,13 @@ PersistentKeepalive = 25
         }
         if (requestCode != REQUEST_CONFIG) return
         val uri = data?.data ?: return
-
         try {
             val raw = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
-                ?.removePrefix("\uFEFF")?.replace("\r\n", "\n")?.replace("\r", "\n")
                 ?: throw IllegalStateException("Не удалось прочитать выбранный файл")
-            val reservedMatch = Regex("(?im)^\\s*#?\\s*Reserved\\s*=\\s*([0-9\\s,]+)").find(raw)
-            val reserved = reservedMatch?.groupValues?.get(1)?.trim()
-            val normalized = raw.lines().filterNot {
-                it.trim().matches(Regex("(?i)^#?\\s*Reserved\\s*=.*$"))
-            }.joinToString("\n").trim() + "\n"
-            val detectedWarp = raw.contains("cloudflare", ignoreCase = true) ||
-                raw.contains("162.159.") || raw.contains("2606:4700:") || reservedMatch != null
-            val detectedAmnezia = Regex("(?im)^\\s*(S[1-4]|Jc|Jmin|Jmax|H[1-4]|I[1-5])\\s*=").containsMatchIn(raw)
-            val parsed = Config.parse(ByteArrayInputStream(normalized.toByteArray(Charsets.UTF_8)))
-            val displayName = readDisplayName(uri)
-            val savedFileName = saveProfile(displayName.substringBeforeLast('.'), normalized, detectedWarp, reserved)
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putString(KEY_CONFIG_NAME, displayName)
-                .putString(KEY_PROTOCOL, when { detectedWarp -> "WARP"; detectedAmnezia -> "AmneziaWG"; else -> "WireGuard" })
-                .putBoolean(KEY_IS_WARP, detectedWarp)
-                .putString(KEY_WARP_RESERVED, reserved)
-                .apply()
-            importedConfig = parsed
-            refreshProfilesUi()
-            isWarpConfig = detectedWarp
-            warpReserved = reserved
-            protocol = when { detectedWarp -> "WARP"; detectedAmnezia -> "AmneziaWG"; else -> "WireGuard" }
-            updateProtocolButtons()
-            status.text = when { detectedWarp -> "Профиль WARP сохранён: $displayName"; detectedAmnezia -> "Профиль AmneziaWG сохранён: $displayName"; else -> "Сохранено: $displayName" }
-            Toast.makeText(this, "Конфигурация сохранена на устройстве", Toast.LENGTH_SHORT).show()
-            if (detectedWarp && !reserved.isNullOrBlank()) {
-                engineStatus.text = "ПРОФИЛЬ WARP • RESERVED НАЙДЕН"
-                status.text = "Профиль WARP сохранён. Reserved: $reserved"
-            }
+            importConfigText(raw, readDisplayName(uri))
         } catch (e: Exception) {
-            val detail = e.message?.take(140)?.ifBlank { null }
-                ?: e.javaClass.simpleName
-            status.text = "Не удалось прочитать конфигурацию: $detail"
+            val detail = e.message?.take(140)?.ifBlank { null } ?: e.javaClass.simpleName
+            status.text = "Не удалось прочитать конфигурацию: " + detail
             Toast.makeText(this, "Файл не добавлен. Проверьте формат WireGuard .conf", Toast.LENGTH_LONG).show()
         }
         updateConnectionUi()
