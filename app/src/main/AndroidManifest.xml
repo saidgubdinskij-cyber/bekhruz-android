@@ -7,7 +7,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="ZENIX"
+        android:label="VOLTIX"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Material.NoActionBar"
@@ -40,7 +40,7 @@
 
         <service
             android:name=".BekhruzTileService"
-            android:label="ZENIX"
+            android:label="VOLTIX"
             android:icon="@drawable/bekhruz_emblem"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:exported="true">
