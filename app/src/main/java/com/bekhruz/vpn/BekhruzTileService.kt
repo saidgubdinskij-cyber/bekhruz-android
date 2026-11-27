@@ -5,6 +5,8 @@ import android.net.VpnService
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.widget.Toast
+import android.os.Handler
+import android.os.Looper
 import org.amnezia.awg.backend.GoBackend
 import org.amnezia.awg.backend.Tunnel
 import org.amnezia.awg.backend.TunnelActionHandler
@@ -29,7 +31,7 @@ class BekhruzTileService : TileService() {
             try {
                 // VPN permission is granted once from the app. Never launch the Activity from the tile.
                 if (VpnService.prepare(this) != null) {
-                    runOnUiThread {
+                    Handler(Looper.getMainLooper()).post {
                         Toast.makeText(this, "Сначала откройте ZENIX и разрешите подключение VPN", Toast.LENGTH_LONG).show()
                         updateTileState()
                     }
