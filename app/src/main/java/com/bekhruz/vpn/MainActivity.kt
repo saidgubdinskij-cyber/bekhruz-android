@@ -63,7 +63,7 @@ class MainActivity : Activity() {
 
     private val tunnel = object : Tunnel {
         override fun getName(): String {
-            return if (isWarpConfig && !warpReserved.isNullOrBlank()) "bekhruz@reserved=$warpReserved" else "bekhruz"
+            return if (isWarpConfig && !warpReserved.isNullOrBlank()) "voltix@reserved=$warpReserved" else "bekhruz"
         }
         override fun isIpv4ResolutionPreferred(): Boolean = true
         override fun isMetered(): Boolean = false
@@ -158,10 +158,10 @@ class MainActivity : Activity() {
         }
         header.addView(ImageView(this).apply {
             setImageResource(R.drawable.bekhruz_emblem)
-            contentDescription = "ZENIX"
+            contentDescription = "VOLTIX"
         }, LinearLayout.LayoutParams(dp(42), dp(42)))
         header.addView(TextView(this).apply {
-            text = "ZENIX"
+            text = "VOLTIX"
             textSize = 27f
             setTextColor(Color.WHITE)
             typeface = Typeface.create("sans-serif", Typeface.BOLD)
@@ -235,7 +235,7 @@ class MainActivity : Activity() {
         root.addView(connectionButton, full().apply { topMargin = dp(12) })
 
         root.addView(TextView(this).apply {
-            text = "ZENIX"
+            text = "VOLTIX"
             textSize = 10f
             gravity = Gravity.CENTER
             letterSpacing = .12f
@@ -513,7 +513,7 @@ class MainActivity : Activity() {
     private fun shareQrImage(bitmap: Bitmap) {
         try {
             val dir = java.io.File(cacheDir, "qr").apply { mkdirs() }
-            val file = java.io.File(dir, "zenix-profile-" + System.currentTimeMillis() + ".png")
+            val file = java.io.File(dir, "voltix-profile-" + System.currentTimeMillis() + ".png")
             file.outputStream().use { out ->
                 if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) {
                     throw IllegalStateException("Не удалось сохранить QR")
@@ -525,7 +525,7 @@ class MainActivity : Activity() {
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            startActivity(Intent.createChooser(send, "Поделиться QR-кодом ZENIX"))
+            startActivity(Intent.createChooser(send, "Поделиться QR-кодом VOLTIX"))
         } catch (e: Exception) {
             Toast.makeText(this, "Не удалось поделиться QR: " + (e.message?.take(100) ?: "ошибка"), Toast.LENGTH_LONG).show()
         }
@@ -583,7 +583,7 @@ class MainActivity : Activity() {
     }
 
     private fun showAppMenu() {
-        android.app.AlertDialog.Builder(this).setTitle("ZENIX")
+        android.app.AlertDialog.Builder(this).setTitle("VOLTIX")
             .setItems(arrayOf("Импортировать конфигурацию", "Сканировать QR-код", "QR выбранного профиля", "О приложении")) { _, which ->
                 when (which) {
                     0 -> showAddMenu()
@@ -593,7 +593,7 @@ class MainActivity : Activity() {
                         if (activeFile != null) showQrForProfile(activeFile)
                         else Toast.makeText(this, "Сначала выберите VPN-профиль", Toast.LENGTH_SHORT).show()
                     }
-                    3 -> android.app.AlertDialog.Builder(this).setMessage("ZENIX — VPN-клиент на базе WireGuard.").setPositiveButton("OK", null).show()
+                    3 -> android.app.AlertDialog.Builder(this).setMessage("VOLTIX — VPN-клиент на базе WireGuard.").setPositiveButton("OK", null).show()
                 }
             }.show()
     }
