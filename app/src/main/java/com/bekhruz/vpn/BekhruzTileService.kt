@@ -31,7 +31,7 @@ class BekhruzTileService : TileService() {
             try {
                 if (VpnService.prepare(this) != null) {
                     Handler(Looper.getMainLooper()).post {
-                        Toast.makeText(this, "Сначала откройте ZENIX и разрешите подключение VPN", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, "Сначала откройте VOLTIX и разрешите подключение VPN", Toast.LENGTH_LONG).show()
                         updateTileState()
                     }
                     return@Thread
@@ -43,7 +43,7 @@ class BekhruzTileService : TileService() {
                 val warp = prefs.getBoolean(KEY_IS_WARP, false)
                 val tunnel = object : Tunnel {
                     override fun getName(): String =
-                        if (warp && !reserved.isNullOrBlank()) "bekhruz@reserved=$reserved" else "bekhruz"
+                        if (warp && !reserved.isNullOrBlank()) "voltix@reserved=$reserved" else "voltix"
                     override fun isIpv4ResolutionPreferred(): Boolean = true
                     override fun isMetered(): Boolean = false
                     override fun onStateChange(newState: Tunnel.State) {
@@ -75,7 +75,7 @@ class BekhruzTileService : TileService() {
 
     private fun updateTileState() {
         qsTile?.let { tile ->
-            tile.label = "ZENIX"
+            tile.label = "VOLTIX"
             tile.state = if (prefs.getBoolean(KEY_CONNECTED, false)) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
             tile.updateTile()
         }
