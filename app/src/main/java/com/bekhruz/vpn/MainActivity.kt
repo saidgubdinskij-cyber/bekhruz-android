@@ -482,10 +482,9 @@ class MainActivity : Activity() {
             disconnectTunnel()
             return
         }
-        if (isWarpConfig && warpReserved.isNullOrBlank()) {
-            status.text = "В этом WARP-файле нет Reserved. Импортируйте полный WARP-конфиг с тремя Reserved-байтами."
-            return
-        }
+        // Reserved не обязателен для импорта и запуска профиля.
+        // Если байты присутствуют, они передаются через имя туннеля; если нет —
+        // пробуем подключиться без них. Успех handshake зависит от сервера.
         if (importedConfig == null) {
             status.text = "Сначала добавьте файл конфигурации .conf"
             return
