@@ -20,10 +20,10 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import com.wireguard.android.backend.GoBackend
-import com.wireguard.android.backend.Tunnel
-import com.wireguard.config.Config
-import com.wireguard.crypto.KeyPair
+import org.amnezia.awg.backend.GoBackend
+import org.amnezia.awg.backend.Tunnel
+import org.amnezia.awg.config.Config
+import org.amnezia.awg.crypto.KeyPair
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -210,10 +210,7 @@ class MainActivity : Activity() {
         amneziaButton = protocolButton("AmneziaWG")
         wireGuardButton.setOnClickListener { selectProtocol("WireGuard") }
         warpButton.setOnClickListener { selectProtocol("WARP") }
-        amneziaButton.setOnClickListener {
-            selectProtocol("AmneziaWG")
-            status.text = "AmneziaWG пока не поддерживается движком"
-        }
+        amneziaButton.setOnClickListener { selectProtocol("AmneziaWG") }
         protocolRow.addView(wireGuardButton, LinearLayout.LayoutParams(0, dp(44), 1f).apply { rightMargin = dp(4) })
         protocolRow.addView(warpButton, LinearLayout.LayoutParams(0, dp(44), 1f).apply { leftMargin = dp(4); rightMargin = dp(4) })
         protocolRow.addView(amneziaButton, LinearLayout.LayoutParams(0, dp(44), 1f).apply { leftMargin = dp(4) })
@@ -282,15 +279,16 @@ class MainActivity : Activity() {
             val parsed = Config.parse(ByteArrayInputStream(raw.toByteArray(Charsets.UTF_8)))
             val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             val warp = raw.contains("cloudflare", true) || raw.contains("162.159.") || file.name.contains("warp", true)
+            val amnezia = Regex("(?im)^\\s*(S[1-4]|Jc|Jmin|Jmax|H[1-4]|I[1-5])\\s*=").containsMatchIn(raw)
             val reserved = prefs.getString(KEY_WARP_RESERVED, null)
             prefs.edit().putString("active_profile_file", file.name)
                 .putString(KEY_CONFIG_NAME, file.nameWithoutExtension.substringBeforeLast("_"))
                 .putBoolean(KEY_IS_WARP, warp)
-                .putString(KEY_PROTOCOL, if (warp) "WARP" else "WireGuard").apply()
+                .putString(KEY_PROTOCOL, when { warp -> "WARP"; amnezia -> "AmneziaWG"; else -> "WireGuard" }).apply()
             openFileOutput(CONFIG_FILE, MODE_PRIVATE).use { it.write(raw.toByteArray(Charsets.UTF_8)) }
             importedConfig = parsed
             isWarpConfig = warp
-            protocol = if (warp) "WARP" else "WireGuard"
+            protocol = when { warp -> "WARP"; amnezia -> "AmneziaWG"; else -> "WireGuard" }
             warpReserved = if (warp) reserved else null
             updateProtocolButtons()
             refreshProfilesUi()
@@ -464,7 +462,7 @@ class MainActivity : Activity() {
         if (value == "WARP" && isWarpConfig) {
             status.text = "Профиль WARP: ${savedConfigName()}"
         } else if (value == "AmneziaWG") {
-            status.text = "Поддержка AmneziaWG ещё не подключена"
+            status.text = "Профиль AmneziaWG: ${savedConfigName()}"
         } else if (importedConfig != null) {
             status.text = "Сохранено: ${savedConfigName()}"
         }
@@ -489,10 +487,6 @@ class MainActivity : Activity() {
         }
         if (protocol == "WARP" && (!isWarpConfig || warpReserved.isNullOrBlank())) {
             status.text = "Для WARP нужен профиль с тремя Reserved-байтами. Создайте новый профиль или импортируйте WARP-конфигурацию."
-            return
-        }
-        if (protocol == "AmneziaWG") {
-            status.text = "Поддержка AmneziaWG ещё не подключена"
             return
         }
         if (importedConfig == null) {
@@ -669,7 +663,7 @@ PersistentKeepalive = 25
             connected -> "ОТКЛЮЧИТЬСЯ"
             else -> "ПОДКЛЮЧИТЬСЯ"
         }
-        connectionButton.isEnabled = !busy && (protocol != "AmneziaWG" || connected)
+        connectionButton.isEnabled = !busy
         connectionButton.background = rounded(if (connected) Color.rgb(255, 100, 90) else neon, 18)
         if (::engineStatus.isInitialized) {
             engineStatus.text = when {
@@ -749,12 +743,13 @@ PersistentKeepalive = 25
             }.joinToString("\n").trim() + "\n"
             val detectedWarp = raw.contains("cloudflare", ignoreCase = true) ||
                 raw.contains("162.159.") || raw.contains("2606:4700:") || reservedMatch != null
+            val detectedAmnezia = Regex("(?im)^\\s*(S[1-4]|Jc|Jmin|Jmax|H[1-4]|I[1-5])\\s*=").containsMatchIn(raw)
             val parsed = Config.parse(ByteArrayInputStream(normalized.toByteArray(Charsets.UTF_8)))
             val displayName = readDisplayName(uri)
             saveProfile(displayName.substringBeforeLast('.'), normalized, detectedWarp, reserved)
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putString(KEY_CONFIG_NAME, displayName)
-                .putString(KEY_PROTOCOL, if (detectedWarp) "WARP" else protocol)
+                .putString(KEY_PROTOCOL, when { detectedWarp -> "WARP"; detectedAmnezia -> "AmneziaWG"; else -> "WireGuard" })
                 .putBoolean(KEY_IS_WARP, detectedWarp)
                 .putString(KEY_WARP_RESERVED, reserved)
                 .apply()
@@ -762,9 +757,9 @@ PersistentKeepalive = 25
             refreshProfilesUi()
             isWarpConfig = detectedWarp
             warpReserved = reserved
-            if (detectedWarp) protocol = "WARP"
+            protocol = when { detectedWarp -> "WARP"; detectedAmnezia -> "AmneziaWG"; else -> "WireGuard" }
             updateProtocolButtons()
-            status.text = if (detectedWarp) "Профиль WARP сохранён: $displayName" else "Сохранено: $displayName"
+            status.text = when { detectedWarp -> "Профиль WARP сохранён: $displayName"; detectedAmnezia -> "Профиль AmneziaWG сохранён: $displayName"; else -> "Сохранено: $displayName" }
             Toast.makeText(this, "Конфигурация сохранена на устройстве", Toast.LENGTH_SHORT).show()
             if (detectedWarp && !reserved.isNullOrBlank()) {
                 engineStatus.text = "ПРОФИЛЬ WARP • RESERVED НАЙДЕН"
