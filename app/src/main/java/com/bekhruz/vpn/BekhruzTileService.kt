@@ -17,9 +17,20 @@ class BekhruzTileService : TileService() {
         super.onClick()
         val launch = Intent(this, MainActivity::class.java).apply {
             action = MainActivity.ACTION_TILE_CONNECT
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
-        startActivityAndCollapse(launch)
+        if (android.os.Build.VERSION.SDK_INT >= 34) {
+            val pending = android.app.PendingIntent.getActivity(
+                this,
+                41,
+                launch,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+            startActivityAndCollapse(pending)
+        } else {
+            @Suppress("DEPRECATION")
+            startActivityAndCollapse(launch)
+        }
     }
 
     private fun updateTileState() {
