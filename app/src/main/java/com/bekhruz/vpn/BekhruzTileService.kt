@@ -29,7 +29,6 @@ class BekhruzTileService : TileService() {
 
         Thread {
             try {
-                // VPN permission is granted once from the app. Never launch the Activity from the tile.
                 if (VpnService.prepare(this) != null) {
                     Handler(Looper.getMainLooper()).post {
                         Toast.makeText(this, "Сначала откройте ZENIX и разрешите подключение VPN", Toast.LENGTH_LONG).show()
@@ -64,8 +63,9 @@ class BekhruzTileService : TileService() {
                 }
             } catch (e: Exception) {
                 prefs.edit().putBoolean(KEY_CONNECTED, false).apply()
-                runOnUiThread {
+                Handler(Looper.getMainLooper()).post {
                     Toast.makeText(this, "Ошибка VPN: ${e.message?.take(100) ?: "не удалось переключить"}", Toast.LENGTH_LONG).show()
+                    updateTileState()
                 }
             } finally {
                 requestListeningState(this, ComponentName(this, BekhruzTileService::class.java))
