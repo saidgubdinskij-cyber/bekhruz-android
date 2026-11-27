@@ -4,7 +4,7 @@ plugins {
 }
 
 dependencies {
-    implementation("com.wireguard.android:tunnel:1.0.20230706")
+    implementation("com.zaneschepke:amneziawg-android:2.3.7")
 }
 
 android {
