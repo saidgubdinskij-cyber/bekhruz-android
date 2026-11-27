@@ -9,7 +9,7 @@ dependencies {
 
 android {
     namespace = "com.bekhruz.vpn"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.bekhruz.vpn"
