@@ -109,13 +109,19 @@ class MainActivity : Activity() {
         override fun run() {
             val rx = TrafficStats.getTotalRxBytes()
             val tx = TrafficStats.getTotalTxBytes()
-            val down = if (rx >= lastRxBytes && lastRxBytes >= 0) rx - lastRxBytes else 0L
-            val up = if (tx >= lastTxBytes && lastTxBytes >= 0) tx - lastTxBytes else 0L
+            if (connected) {
+                val down = if (rx >= lastRxBytes && lastRxBytes >= 0) rx - lastRxBytes else 0L
+                val up = if (tx >= lastTxBytes && lastTxBytes >= 0) tx - lastTxBytes else 0L
+                if (::speedStatus.isInitialized) {
+                    speedStatus.text = "↓ " + formatSpeed(down) + "     ↑ " + formatSpeed(up)
+                }
+            } else if (::speedStatus.isInitialized) {
+                speedStatus.text = "↓ 0 КБ/с     ↑ 0 КБ/с"
+            }
+            // Обновляем базовые значения и в отключённом состоянии,
+            // чтобы после подключения не учитывать трафик до VPN.
             lastRxBytes = rx
             lastTxBytes = tx
-            if (::speedStatus.isInitialized) {
-                speedStatus.text = "↓ " + formatSpeed(down) + "     ↑ " + formatSpeed(up)
-            }
             speedHandler.postDelayed(this, 1000)
         }
     }
@@ -658,6 +664,11 @@ PersistentKeepalive = 25
 
     private fun updateConnectionUi() {
         if (!::connectionButton.isInitialized) return
+        if (::speedStatus.isInitialized && !connected) {
+            lastRxBytes = TrafficStats.getTotalRxBytes()
+            lastTxBytes = TrafficStats.getTotalTxBytes()
+            speedStatus.text = "↓ 0 КБ/с     ↑ 0 КБ/с"
+        }
         connectionButton.text = when {
             busy -> "ПОДОЖДИТЕ…"
             connected -> "ОТКЛЮЧИТЬСЯ"
